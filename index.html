@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Greenstone Dev | Open Source & Linux Linux-Projekte</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #38bdf8;
+        }
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+        header {
+            max-width: 800px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+            box-sizing: border-box;
+        }
+        .logo {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--accent);
+        }
+        main {
+            flex: 1;
+            max-width: 800px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 1rem;
+            box-sizing: border-box;
+        }
+        .hero {
+            margin-bottom: 3rem;
+        }
+        h1 { font-size: 2.5rem; margin-bottom: 0.5rem; }
+        .subtitle { color: var(--text-muted); font-size: 1.2rem; margin-top: 0; }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+        .card {
+            background-color: var(--card-bg);
+            padding: 1.5rem;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            transition: transform 0.2s;
+        }
+        .card:hover { transform: translateY(-2px); }
+        .card h3 { margin-top: 0; color: var(--accent); }
+        .card p { color: var(--text-muted); font-size: 0.95rem; line-height: 1.5; }
+        
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            border-top: 1px solid #334155;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo">gs51_dev //</div>
+    </header>
+
+    <main>
+        <section class="hero">
+            <h1>Workspace & Code-Infrastruktur</h1>
+            <p class="subtitle">Willkommen auf meiner privaten Entwicklungs-Umgebung. Hier teste ich Automatisierungen, Linux-Skripte und API-Anbindungen.</p>
+        </section>
+
+        <h2>Aktuelle Test-Projekte</h2>
+        <div class="grid">
+            <div class="card">
+                <h3>01 / Server-Automation</h3>
+                <p>Bash-Skripte zur automatisierten Systempflege, Log-Zusammenfassung und Überwachung von Systemdiensten via systemd.</p>
+            </div>
+            <div class="card">
+                <h3>02 / Cloudflare Worker API</h3>
+                <p>Erste Gehversuche mit Serverless Edge-Computing und dynamischen Routings über das Cloudflare-Netzwerk.</p>
+            </div>
+            <div class="card">
+                <h3>03 / Netzwerk & DNS Lab</h3>
+                <p>Konfigurationen von dynamischen DNS-Clients (DDNS) zur Erreichbarkeit von Test-Umgebungen im lokalen Netzwerk.</p>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        &copy; 2026 greenstone51.de - Gehostet via Cloudflare Pages & GitHub Security Pipeline.
+    </footer>
+
+</body>
+</html>
