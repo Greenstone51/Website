@@ -12,6 +12,9 @@ from collections import defaultdict
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, send_from_directory, send_file, abort
 from werkzeug.security import check_password_hash
 from werkzeug.utils import secure_filename
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
 
