@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Greenstone51 // Home</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="stylesheet" href="/static/style.css?v=6">
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebSite",
+  "name": "Greenstone51's Homeserver",
+  "alternateName": ["Greenstone51", "Greenstone 51", "Greenstone51 Server", "Greenstones Server", "Greenstone51's Server", "Greenstone51 Homeserver"],
+  "url": "https://greenstone51.de/",
+  "author": {
+    "@type": "Person",
+    "name": "Greenstone51",
+    "url": "https://greenstone51.de/"
+  }
+}
+</script>
+
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "Home",
+      "item": "https://greenstone51.de/"
+    }
+  ]
+}
+</script>
+</head>
+<body>
+
+    <header>
+        <a href="/" class="logo">greenstone51 //</a>
+        <button class="hamburger" onclick="toggleMenu()" aria-label="Menü öffnen">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+        <nav class="nav-desktop">
+            <a href="/" class="nav-link active">Home</a>
+            <a href="/upload" class="nav-link">Upload</a>
+            <a href="/download" class="nav-link">Download</a>
+            <a href="/vpn51" class="nav-link">VPN</a>
+            <a href="/vpn51/admin" class="nav-link">Admin</a>
+        </nav>
+        <nav class="nav-mobile" id="navMobile">
+            <a href="/" class="nav-link active">Home</a>
+            <a href="/upload" class="nav-link">Upload</a>
+            <a href="/download" class="nav-link">Download</a>
+            <a href="/vpn51" class="nav-link">VPN Dashboard</a>
+            <a href="/vpn51/admin" class="nav-link">Admin Center</a>
+        </nav>
+    </header>
+
+    <main>
+        <div class="page-header">
+            <h1 class="page-title">Homeserver, ein Kaliber größer.</h1>
+            <p class="page-subtitle">Willkommen auf meinem semi-privaten Server. Hier befinden sich verschiedene Services.</p>
+        </div>
+
+        <h2 class="section-title">Aktuelle Services</h2>
+        <div class="grid">
+            <div class="card">
+                <div>
+                    <h3 class="card-title">01 / VPN51</h3>
+                    <p class="card-text mb-15">Dashboard zum VPN Server mit Live-Metriken und Zugangsdaten.</p>
+                </div>
+                <a href="/vpn51" class="btn-action text-center">Dashboard öffnen &rarr;</a>
+            </div>
+
+            <div class="card">
+                <div>
+                    <h3 class="card-title">02 / Minecraft Bunker</h3>
+                    <p class="card-text">Eigener Minecraft Server mit langer Geschichte im ABC-Bunker Theme. Erreichbar auf mc.greenstone51.de:26951</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <div>
+                    <h3 class="card-title">03 / Satisfactory Server</h3>
+                    <p class="card-text">Eigener Satisfactory Server. Erreichbar auf satis.greenstone51.de:7777</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <div>
+                    <h3 class="card-title">04 / File Sharing</h3>
+                    <p class="card-text mb-15">Hier können Dateien hochgeladen, als Vorschau betrachtet und heruntergeladen werden.</p>
+                </div>
+                <div class="btn-group">
+                    <a href="/upload" class="btn-action">Hochladen</a>
+                    <a href="/download" class="btn-action">Herunterladen</a>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        &copy; 2026 Greenstone51. All rights reserved.
+    </footer>
+
+    <script>
+        function toggleMenu() {
+            document.getElementById('navMobile').classList.toggle('open');
+        }
+    </script>
+</body>
+</html>

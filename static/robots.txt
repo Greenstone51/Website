@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+Allow: /upload
+Allow: /download
+Allow: /vpn51
+
+# Ausschluss sensibler oder interner Pfade
+Disallow: /vpn51/admin
+Disallow: /api/
+
+# Verweis auf die Sitemap
+Sitemap: https://greenstone51.de/sitemap.xml

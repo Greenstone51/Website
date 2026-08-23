@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Greenstone51 // 404</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="stylesheet" href="/static/style.css?v=5">
+</head>
+<body>
+
+    <header>
+        <a href="/" class="logo">greenstone51 // <span>404</span></a>
+        <button class="hamburger" onclick="toggleMenu()" aria-label="Menü öffnen">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+        <nav class="nav-desktop">
+            <a href="/" class="nav-link">Home</a>
+            <a href="/upload" class="nav-link">Upload</a>
+            <a href="/download" class="nav-link">Download</a>
+            <a href="/vpn51" class="nav-link">VPN</a>
+            <a href="/vpn51/admin" class="nav-link">Admin</a>
+        </nav>
+        <nav class="nav-mobile" id="navMobile">
+            <a href="/" class="nav-link">Home</a>
+            <a href="/upload" class="nav-link">Upload</a>
+            <a href="/download" class="nav-link">Download</a>
+            <a href="/vpn51" class="nav-link">VPN Dashboard</a>
+            <a href="/vpn51/admin" class="nav-link">Admin Center</a>
+        </nav>
+    </header>
+
+    <main class="main-centered">
+        <div class="error-container">
+            <div class="error-code">404</div>
+            <h1>Inhalt nicht verfügbar</h1>
+            <p>Die angeforderte Adresse existiert nicht oder wurde verschoben.</p>
+            <a href="/" class="btn-action">Zurück zur Startseite</a>
+        </div>
+    </main>
+
+    <footer>
+        &copy; 2026 Greenstone51. All rights reserved.
+    </footer>
+
+    <script>
+        function toggleMenu() {
+            document.getElementById('navMobile').classList.toggle('open');
+        }
+    </script>
+</body>
+</html>

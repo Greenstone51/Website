@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Greenstone51 // Download</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="stylesheet" href="/static/style.css?v=17">
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "greenstone51.de",
+      "item": "https://greenstone51.de/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "File Sharing",
+      "item": "https://greenstone51.de/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "Download",
+      "item": "https://greenstone51.de/download"
+    }
+  ]
+}
+</script>
+</head>
+<body id="pageBody">
+
+    <header>
+        <a href="/" class="logo">greenstone51 // <span>download</span></a>
+        <button class="hamburger" onclick="toggleMenu()" aria-label="Menü öffnen">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+        <nav class="nav-desktop">
+            <a href="/" class="nav-link">Home</a>
+            <a href="/upload" class="nav-link">Upload</a>
+            <a href="/download" class="nav-link active">Download</a>
+            <a href="/vpn51" class="nav-link">VPN</a>
+            <a href="/vpn51/admin" class="nav-link">Admin</a>
+        </nav>
+        <nav class="nav-mobile" id="navMobile">
+            <a href="/" class="nav-link">Home</a>
+            <a href="/upload" class="nav-link">Upload</a>
+            <a href="/download" class="nav-link active">Download</a>
+            <a href="/vpn51" class="nav-link">VPN Dashboard</a>
+            <a href="/vpn51/admin" class="nav-link">Admin Center</a>
+        </nav>
+    </header>
+
+    <main>
+        <div class="page-header">
+            <h1 class="page-title">Datei-Download</h1>
+            <p class="page-subtitle" id="pageSubtitle">Klicke eine Datei an zum Herunterladen oder fahre mit der Maus darüber für eine Vorschau.</p>
+        </div>
+
+        <div class="card card-full">
+            <div class="toolbar-download">
+                <input type="text" id="searchInput" placeholder="Dateien filtern..." oninput="filterFiles()" class="input-search">
+                <button id="downloadBtn" class="btn-action" onclick="downloadSelected()" disabled>Ausgewählte herunterladen (0)</button>
+            </div>
+
+            <div class="table-wrapper">
+                <table class="file-table">
+                    <thead>
+                        <tr>
+                            <th class="th-checkbox">
+                                <input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)" class="checkbox-custom">
+                            </th>
+                            <th class="th-sortable" onclick="setSort('name')">
+                                Dateiname <span id="sort-name" class="sort-arrow"></span>
+                            </th>
+                            <th class="th-sortable" onclick="setSort('size')">
+                                Größe <span id="sort-size" class="sort-arrow"></span>
+                            </th>
+                            <th class="th-sortable" onclick="setSort('mtime')">
+                                Uploaddatum <span id="sort-mtime" class="sort-arrow"></span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="fileListBody">
+                        <tr>
+                            <td colspan="4" class="table-empty-msg">Lade Dateiliste...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+
+    <div id="previewBackdrop" class="preview-backdrop" onclick="hidePreview()"></div>
+
+    <div id="previewPopover" class="preview-popover">
+        <img id="previewImage" src="" alt="Vorschau" class="hidden">
+        <pre id="previewText" class="hidden"></pre>
+        <div id="previewInfo" class="preview-info hidden"></div>
+    </div>
+
+    <footer>
+        &copy; 2026 Greenstone51. All rights reserved.
+    </footer>
+
+    <script>
+        // Präzise Mobile- & Touch-Erkennung
+        const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+        const isMobileOS = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent) 
+            || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+        const isCoarsePointer = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+        const isRealTouchDevice = isMobileOS || isCoarsePointer;
+
+        const pageSubtitle = document.getElementById('pageSubtitle');
+
+        if (isRealTouchDevice) {
+            document.body.classList.add('touch-device');
+            pageSubtitle.textContent = 'Tippe eine Datei an zum Herunterladen oder nutze den Vorschau-Button für eine Vorschau.';
+        } else {
+            pageSubtitle.textContent = 'Klicke eine Datei an zum Herunterladen oder fahre mit der Maus darüber für eine Vorschau.';
+        }
+
+        const supportsHover = window.matchMedia('(hover: hover)').matches && !isRealTouchDevice;
+
+        function toggleMenu() {
+            document.getElementById('navMobile').classList.toggle('open');
+        }
+
+        let currentFiles = [];
+        let selectedFiles = new Set();
+        let currentHoverUrl = '';
+        const textCache = new Map();
+
+        let sortColumn = 'name';
+        let sortDirection = 'asc';
+
+        const popover = document.getElementById('previewPopover');
+        const popoverImg = document.getElementById('previewImage');
+        const popoverText = document.getElementById('previewText');
+        const popoverInfo = document.getElementById('previewInfo');
+        const backdrop = document.getElementById('previewBackdrop');
+        const tbody = document.getElementById('fileListBody');
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function formatDate(mtime) {
+            const date = new Date(mtime * 1000);
+            return date.toLocaleString('de-DE', {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        function getFileType(filename) {
+            if (/\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)$/i.test(filename)) return 'image';
+            if (/\.(txt|log|md|cfg|conf|ini|json|py|sh|css|html|js|rtf|csv|xml|yaml|yml)$/i.test(filename)) return 'text';
+            return 'generic';
+        }
+
+        async function fetchFileList() {
+            try {
+                const response = await fetch('/download/api/files');
+                if (!response.ok) return;
+                const files = await response.json();
+                
+                currentFiles = files;
+                renderFileList();
+            } catch (err) {
+                console.error("Fehler beim Abrufen der Dateiliste:", err);
+            }
+        }
+
+        function setSort(col) {
+            if (sortColumn === col) {
+                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortColumn = col;
+                sortDirection = 'asc';
+            }
+            renderFileList();
+        }
+
+        function updateSortHeaders() {
+            ['name', 'size', 'mtime'].forEach(col => {
+                const el = document.getElementById(`sort-${col}`);
+                if (el) {
+                    el.textContent = sortColumn === col ? (sortDirection === 'asc' ? '▲' : '▼') : '';
+                }
+            });
+        }
+
+        function renderFileList() {
+            const searchVal = document.getElementById('searchInput').value.toLowerCase();
+            let filtered = currentFiles.filter(f => f.name.toLowerCase().includes(searchVal));
+
+            filtered.sort((a, b) => {
+                let valA = a[sortColumn];
+                let valB = b[sortColumn];
+
+                if (sortColumn === 'name') {
+                    valA = valA.toLowerCase();
+                    valB = valB.toLowerCase();
+                    return sortDirection === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                }
+
+                if (sortDirection === 'asc') {
+                    return valA > valB ? 1 : valA < valB ? -1 : 0;
+                } else {
+                    return valA < valB ? 1 : valA > valB ? -1 : 0;
+                }
+            });
+
+            updateSortHeaders();
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="table-empty-msg">Keine Dateien vorhanden.</td></tr>';
+                updateDownloadButton();
+                return;
+            }
+
+            let html = '';
+            filtered.forEach(file => {
+                const isChecked = selectedFiles.has(file.name) ? 'checked' : '';
+                const fileUrl = `/download/file/${encodeURIComponent(file.name)}`;
+                const type = getFileType(file.name);
+                const sizeFormatted = formatBytes(file.size);
+                const dateFormatted = formatDate(file.mtime);
+                const safeName = escapeHtml(file.name);
+
+                html += `
+                    <tr class="file-row">
+                        <td>
+                            <input type="checkbox" class="item-checkbox checkbox-custom" value="${file.name}" ${isChecked} onchange="toggleFileSelection(this)">
+                        </td>
+                        <td class="file-name-cell">
+                            <div class="file-name-wrapper">
+                                <a href="${fileUrl}" target="_blank" 
+                                   onmouseenter="handleMouseEnter(event, '${fileUrl}', '${type}', '${safeName}', '${sizeFormatted}', '${dateFormatted}')"
+                                   onmousemove="movePreview(event)"
+                                   onmouseleave="hidePreview()"
+                                   class="file-link">${file.name}</a>
+                                <button class="btn-preview-mobile" onclick="openTouchPreview(event, '${fileUrl}', '${type}', '${safeName}', '${sizeFormatted}', '${dateFormatted}')"><img src="/static/preview-btn.svg" alt="Vorschau"></button>
+                            </div>
+                        </td>
+                        <td class="cell-nowrap">${sizeFormatted}</td>
+                        <td class="cell-nowrap">${dateFormatted}</td>
+                    </tr>
+                `;
+            });
+
+            tbody.innerHTML = html;
+            updateDownloadButton();
+        }
+
+        function openTouchPreview(e, url, type, name, sizeStr, dateStr) {
+            e.preventDefault();
+            e.stopPropagation();
+            showPreview(url, type, name, sizeStr, dateStr);
+            backdrop.style.display = 'block';
+        }
+
+        function handleMouseEnter(e, url, type, name, sizeStr, dateStr) {
+            if (supportsHover) {
+                showPreview(url, type, name, sizeStr, dateStr);
+                movePreview(e);
+            }
+        }
+
+        function showPreview(url, type, name, sizeStr, dateStr) {
+            currentHoverUrl = url;
+            popoverImg.classList.add('hidden');
+            popoverText.classList.add('hidden');
+            popoverInfo.classList.add('hidden');
+
+            if (type === 'image') {
+                popoverImg.src = url;
+                popoverImg.classList.remove('hidden');
+                popover.style.display = 'block';
+            } else if (type === 'text') {
+                popoverText.classList.remove('hidden');
+                popover.style.display = 'block';
+
+                if (textCache.has(url)) {
+                    popoverText.textContent = textCache.get(url);
+                } else {
+                    popoverText.textContent = 'Lade Vorschau...';
+                    fetch(url)
+                        .then(res => res.text())
+                        .then(text => {
+                            const snippet = text.length > 500 ? text.substring(0, 500) + '...' : text;
+                            textCache.set(url, snippet);
+                            if (currentHoverUrl === url) {
+                                popoverText.textContent = snippet;
+                            }
+                        })
+                        .catch(() => {
+                            if (currentHoverUrl === url) {
+                                popoverText.textContent = 'Fehler beim Laden der Vorschau.';
+                            }
+                        });
+                }
+            } else {
+                const ext = name.includes('.') ? name.split('.').pop().toUpperCase() : 'Unbekannt';
+                popoverInfo.innerHTML = `
+                    <div class="preview-info-title">Datei-Informationen</div>
+                    <strong>Name:</strong> ${name}<br>
+                    <strong>Typ:</strong> .${ext}-Datei<br>
+                    <strong>Größe:</strong> ${sizeStr}<br>
+                    <strong>Uploaddatum:</strong> ${dateStr}
+                `;
+                popoverInfo.classList.remove('hidden');
+                popover.style.display = 'block';
+            }
+        }
+
+        function movePreview(e) {
+            if (!supportsHover || popover.style.display !== 'block') return;
+            
+            let posX = e.clientX + 15;
+            let posY = e.clientY + 15;
+
+            if (posX + 420 > window.innerWidth) {
+                posX = e.clientX - 425;
+            }
+
+            popover.style.left = posX + 'px';
+            popover.style.top = posY + 'px';
+        }
+
+        function hidePreview() {
+            currentHoverUrl = '';
+            popover.style.display = 'none';
+            backdrop.style.display = 'none';
+            popoverImg.src = '';
+            popoverText.textContent = '';
+            popoverInfo.innerHTML = '';
+        }
+
+        function filterFiles() {
+            renderFileList();
+        }
+
+        function toggleFileSelection(checkbox) {
+            if (checkbox.checked) {
+                selectedFiles.add(checkbox.value);
+            } else {
+                selectedFiles.delete(checkbox.value);
+            }
+            updateDownloadButton();
+        }
+
+        function toggleSelectAll(masterCheckbox) {
+            const searchVal = document.getElementById('searchInput').value.toLowerCase();
+            const filtered = currentFiles.filter(f => f.name.toLowerCase().includes(searchVal));
+
+            filtered.forEach(file => {
+                if (masterCheckbox.checked) {
+                    selectedFiles.add(file.name);
+                } else {
+                    selectedFiles.delete(file.name);
+                }
+            });
+
+            renderFileList();
+        }
+
+        function updateDownloadButton() {
+            const btn = document.getElementById('downloadBtn');
+            const count = selectedFiles.size;
+            btn.textContent = `Ausgewählte herunterladen (${count})`;
+            btn.disabled = count === 0;
+
+            const selectAll = document.getElementById('selectAll');
+            if (currentFiles.length > 0 && selectedFiles.size === currentFiles.length) {
+                selectAll.checked = true;
+                selectAll.indeterminate = false;
+            } else if (selectedFiles.size > 0) {
+                selectAll.checked = false;
+                selectAll.indeterminate = true;
+            } else {
+                selectAll.checked = false;
+                selectAll.indeterminate = false;
+            }
+        }
+
+        async function downloadSelected() {
+            const filesArray = Array.from(selectedFiles);
+            if (filesArray.length === 0) return;
+
+            if (filesArray.length === 1) {
+                const filename = filesArray[0];
+                window.location.href = `/download/file/${encodeURIComponent(filename)}`;
+            } else {
+                try {
+                    const response = await fetch('/download/zip', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ files: filesArray })
+                    });
+                    
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        const downloadUrl = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = downloadUrl;
+                        a.download = 'greenstone51_downloads.zip';
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                    } else {
+                        alert("Fehler beim Erstellen der ZIP-Datei.");
+                    }
+                } catch (err) {
+                    console.error("ZIP-Download Fehler:", err);
+                }
+            }
+        }
+
+        fetchFileList();
+        setInterval(fetchFileList, 5000);
+    </script>
+
+</body>
+</html>

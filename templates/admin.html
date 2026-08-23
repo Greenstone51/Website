@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Greenstone51 // Admin</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="stylesheet" href="/static/style.css?v=7">
+</head>
+<body>
+
+    <header>
+        <a href="/" class="logo">greenstone51 // <span>admin</span></a>
+        <button class="hamburger" onclick="toggleMenu()" aria-label="Menü öffnen">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+        <nav class="nav-desktop">
+            <a href="/" class="nav-link">Home</a>
+            <a href="/upload" class="nav-link">Upload</a>
+            <a href="/download" class="nav-link">Download</a>
+            <a href="/vpn51" class="nav-link">VPN</a>
+            <a href="/vpn51/admin" class="nav-link active">Admin</a>
+        </nav>
+        <nav class="nav-mobile" id="navMobile">
+            <a href="/" class="nav-link">Home</a>
+            <a href="/upload" class="nav-link">Upload</a>
+            <a href="/download" class="nav-link">Download</a>
+            <a href="/vpn51" class="nav-link">VPN Dashboard</a>
+            <a href="/vpn51/admin" class="nav-link active">Admin Center</a>
+        </nav>
+    </header>
+
+    <main class="{% if login_mode %}main-centered{% endif %}">
+        {% if login_mode %}
+            <div class="card login-card">
+                <h2 class="login-title">Admin Login Benötigt</h2>
+                {% if error %}
+                    <div class="alert alert-danger">{{ error }}</div>
+                {% endif %}
+                <form method="POST" action="/vpn51/admin">
+                    <div class="form-group">
+                        <label for="password" class="form-label">Server-Passwort</label>
+                        <input type="password" id="password" name="password" placeholder="••••••••" required autofocus class="form-input">
+                    </div>
+                    <button type="submit" class="btn-action w-100">Einloggen &rarr;</button>
+                </form>
+            </div>
+        {% else %}
+            <div class="page-header">
+                <h1 class="page-title">Server Kontrollzentrum</h1>
+                <p class="page-subtitle">Administrativer Zugriff auf den Server.</p>
+            </div>
+
+            <div class="grid">
+                <div class="card">
+                    <h3 class="card-title mb-1">Server-Details</h3>
+                    <div>
+                        <div class="info-row"><span class="info-label">Uptime:</span><span id="srvUptime">Lade...</span></div>
+                        <div class="info-row"><span class="info-label">Speicher Belegung (/):</span><span id="srvDisk">Lade...</span></div>
+                        <div class="info-row"><span class="info-label">Xray Core Service:</span><span id="srvXray">Lade...</span></div>
+                        <div class="info-row"><span class="info-label">Flask API Service:</span><span id="srvApi">Lade...</span></div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 class="card-title mb-1">Dienste manuell steuern</h3>
+                    
+                    <div class="service-control service-control-border">
+                        <div class="service-title">Xray-Core Proxy Tunnel</div>
+                        <div class="button-row">
+                            <button onclick="triggerAction('start_xray')" class="btn-ctrl btn-ctrl-start">Start</button>
+                            <button onclick="triggerAction('stop_xray')" class="btn-ctrl btn-ctrl-stop">Stop</button>
+                            <button onclick="triggerAction('restart_xray')" class="btn-ctrl btn-ctrl-restart">Restart</button>
+                        </div>
+                    </div>
+
+                    <div class="service-control">
+                        <div class="service-title">Flask Web-API</div>
+                        <div class="button-row">
+                            <button onclick="triggerAction('start_api')" disabled title="Läuft bereits" class="btn-ctrl btn-ctrl-disabled">Start</button>
+                            <button onclick="triggerAction('stop_api', true)" class="btn-ctrl btn-ctrl-stop">Stop</button>
+                            <button onclick="triggerAction('restart_api')" class="btn-ctrl btn-ctrl-restart">Restart</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card card-full-grid">
+                    <h3 class="card-title mb-1">DANGER-BEREICH</h3>
+                    <div class="power-buttons">
+                        <button class="btn-power" onclick="triggerAction('reboot_server', true)">Server rebooten</button>
+                        <button class="btn-power" onclick="triggerAction('shutdown_server', true)">Server herunterfahren</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="logout-wrapper">
+                <a href="/vpn51/logout" class="btn-action btn-outline">Ausloggen</a>
+            </div>
+        {% endif %}
+    </main>
+
+    <footer>
+        &copy; 2026 Greenstone51. All rights reserved.
+    </footer>
+
+    <script>
+        function toggleMenu() {
+            document.getElementById('navMobile').classList.toggle('open');
+        }
+
+        {% if not login_mode %}
+        function loadSysInfo() {
+            fetch('/vpn51/api/admin/sysinfo')
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('srvUptime').innerText = data.uptime;
+                    document.getElementById('srvDisk').innerText = data.disk_usage;
+                    
+                    const xray = document.getElementById('srvXray');
+                    xray.innerText = data.xray_status === 'active' ? 'AKTIV' : data.xray_status.toUpperCase();
+                    xray.style.color = data.xray_status === 'active' ? '#10b981' : 'var(--accent-red)';
+
+                    const api = document.getElementById('srvApi');
+                    api.innerText = data.api_status === 'active' ? 'AKTIV' : data.api_status.toUpperCase();
+                    api.style.color = data.api_status === 'active' ? '#10b981' : 'var(--accent-red)';
+                })
+                .catch(err => console.error("Fehler bei Admin-Metriken:", err));
+        }
+
+        function triggerAction(actionName, requireConfirm = false) {
+            if (requireConfirm) {
+                const check = confirm("Bist du dir sicher? Das Stoppen des Dashboards oder das Manipulieren des Servers beendet deine aktive Session!");
+                if (!check) return;
+            }
+
+            fetch('/vpn51/api/admin/execute', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: actionName })
+            })
+            .then(res => res.json())
+            .then(data => {
+                alert(data.msg);
+                setTimeout(loadSysInfo, 1500);
+            })
+            .catch(err => alert("Befehl gesendet. Verbindung wird aktualisiert..."));
+        }
+
+        loadSysInfo();
+        setInterval(loadSysInfo, 4000);
+        {% endif %}
+    </script>
+</body>
+</html>

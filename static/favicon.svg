@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <style>
+    /* Standardfarbe für Light Mode */
+    .slash { fill: #ff0037; }
+    
+    /* Optional: Falls du möchtest, dass es im Dark Mode anders aussieht */
+    @media (prefers-color-scheme: dark) {
+      .slash { fill: #ff0037; } 
+    }
+  </style>
+  <path class="slash" d="M35,15 L15,85 L25,85 L45,15 Z" />
+  <path class="slash" d="M65,15 L45,85 L55,85 L75,15 Z" />
+</svg>

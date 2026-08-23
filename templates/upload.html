@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Greenstone51 // Upload</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="stylesheet" href="/static/style.css?v=15">
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "greenstone51.de",
+      "item": "https://greenstone51.de/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "File Sharing",
+      "item": "https://greenstone51.de/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 3,
+      "name": "Upload",
+      "item": "https://greenstone51.de/upload"
+    }
+  ]
+}
+</script>
+</head>
+<body>
+
+    <header>
+        <a href="/" class="logo">greenstone51 // <span>upload</span></a>
+        <button class="hamburger" onclick="toggleMenu()" aria-label="Menü öffnen">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+        <nav class="nav-desktop">
+            <a href="/" class="nav-link">Home</a>
+            <a href="/upload" class="nav-link active">Upload</a>
+            <a href="/download" class="nav-link">Download</a>
+            <a href="/vpn51" class="nav-link">VPN</a>
+            <a href="/vpn51/admin" class="nav-link">Admin</a>
+        </nav>
+        <nav class="nav-mobile" id="navMobile">
+            <a href="/" class="nav-link">Home</a>
+            <a href="/upload" class="nav-link active">Upload</a>
+            <a href="/download" class="nav-link">Download</a>
+            <a href="/vpn51" class="nav-link">VPN Dashboard</a>
+            <a href="/vpn51/admin" class="nav-link">Admin Center</a>
+        </nav>
+    </header>
+
+    <main>
+        <div class="page-header">
+            <h1 class="page-title">Datei-Upload</h1>
+            <p class="page-subtitle">Ziehe Dateien an eine beliebige Stelle auf der Seite oder klicke, um deine Auswahlliste zu öffnen.</p>
+        </div>
+
+        <div class="card card-upload">
+            
+            <div id="statusMessage" class="alert {% if success %}alert-success{% else %}alert-danger{% endif %}{% if not message %} hidden{% endif %}">
+                {{ message }}
+            </div>
+
+            <form id="uploadForm" action="/upload" method="POST" enctype="multipart/form-data">
+                <input type="file" id="fileInput" name="files" multiple class="file-input-hidden" onchange="handleFileSelect(this.files)">
+                
+                <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+                    <div class="drop-zone-text" id="dropZoneText">
+                        <strong>Klicke hier</strong> oder ziehe Dateien auf die Seite
+                    </div>
+                    <div id="fileListPreview" class="file-list-preview hidden" onclick="event.stopPropagation()"></div>
+                </div>
+
+                <div class="progress-bar-container" id="progressContainer">
+                    <div class="progress-bar" id="progressBar"></div>
+                </div>
+
+                <button type="submit" id="submitBtn" class="btn-action w-100 mt-1" disabled>Upload starten</button>
+            </form>
+        </div>
+    </main>
+
+    <div id="dragTooltip" class="drag-tooltip hidden"></div>
+
+    <footer>
+        &copy; 2026 Greenstone51. All rights reserved.
+    </footer>
+
+    <script>
+        function toggleMenu() {
+            document.getElementById('navMobile').classList.toggle('open');
+        }
+
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const submitBtn = document.getElementById('submitBtn');
+        const fileListPreview = document.getElementById('fileListPreview');
+        const dropZoneText = document.getElementById('dropZoneText');
+        const statusMessage = document.getElementById('statusMessage');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const dragTooltip = document.getElementById('dragTooltip');
+
+        let selectedFiles = [];
+
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            document.body.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            document.body.addEventListener(eventName, (e) => {
+                dropZone.classList.add('drag-over');
+
+                if (e.clientX && e.clientY) {
+                    dragTooltip.style.left = e.clientX + 'px';
+                    dragTooltip.style.top = e.clientY + 'px';
+                }
+
+                const count = e.dataTransfer.items ? e.dataTransfer.items.length : 1;
+                dragTooltip.textContent = count === 1 ? '1 Datei ablegen' : `${count} Dateien ablegen`;
+                dragTooltip.classList.remove('hidden');
+            }, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            document.body.addEventListener(eventName, (e) => {
+                if (e.target === document.body || e.target === document.documentElement || eventName === 'drop') {
+                    dropZone.classList.remove('drag-over');
+                    dragTooltip.classList.add('hidden');
+                }
+            }, false);
+        });
+
+        document.body.addEventListener('drop', (e) => {
+            const dt = e.dataTransfer;
+            if (dt.files && dt.files.length > 0) {
+                handleFileSelect(dt.files);
+            }
+        });
+
+        function handleFileSelect(files) {
+            const incoming = Array.from(files);
+            incoming.forEach(file => {
+                const exists = selectedFiles.some(f => f.name === file.name && f.size === file.size && f.lastModified === file.lastModified);
+                if (!exists) {
+                    selectedFiles.push(file);
+                }
+            });
+            updatePreview();
+        }
+
+        function removeFile(index) {
+            selectedFiles.splice(index, 1);
+            updatePreview();
+        }
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function escapeHtml(str) {
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        function updatePreview() {
+            if (selectedFiles.length === 0) {
+                dropZoneText.style.display = 'block';
+                fileListPreview.classList.add('hidden');
+                submitBtn.disabled = true;
+                fileInput.value = '';
+                return;
+            }
+
+            dropZoneText.style.display = 'none';
+            fileListPreview.classList.remove('hidden');
+            submitBtn.disabled = false;
+
+            let html = '';
+            selectedFiles.forEach((file, index) => {
+                html += `
+                    <div class="file-item">
+                        <div class="file-item-info">
+                            <span class="file-item-name-text">${escapeHtml(file.name)}</span>
+                            <span class="file-item-size">${formatBytes(file.size)}</span>
+                        </div>
+                        <button type="button" class="btn-remove-file" onclick="removeFile(${index})" aria-label="Datei entfernen" title="Datei entfernen">&times;</button>
+                    </div>
+                `;
+            });
+
+            fileListPreview.innerHTML = html;
+        }
+
+        document.getElementById('uploadForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            if (selectedFiles.length === 0) return;
+
+            const formData = new FormData();
+            selectedFiles.forEach(file => {
+                formData.append('files', file);
+            });
+
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', '/upload', true);
+            xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+
+            progressContainer.style.display = 'block';
+            submitBtn.disabled = true;
+
+            xhr.upload.onprogress = function(e) {
+                if (e.lengthComputable) {
+                    const percent = (e.loaded / e.total) * 100;
+                    progressBar.style.width = percent + '%';
+                }
+            };
+
+            xhr.onload = function() {
+                progressContainer.style.display = 'none';
+                progressBar.style.width = '0%';
+
+                let res;
+                try {
+                    res = JSON.parse(xhr.responseText);
+                } catch(err) {
+                    res = { success: false, message: 'Server-Fehler beim Hochladen.' };
+                }
+
+                if (xhr.status === 429) {
+                    statusMessage.classList.remove('hidden');
+                    statusMessage.className = 'alert alert-danger';
+                    statusMessage.textContent = res.message || 'Rate Limit erreicht! Zu viele Upload-Versuche.';
+                    submitBtn.disabled = false;
+                    return;
+                }
+
+                statusMessage.classList.remove('hidden');
+                statusMessage.className = res.success ? 'alert alert-success' : 'alert alert-danger';
+                statusMessage.textContent = res.message;
+
+                if (res.success) {
+                    selectedFiles = [];
+                    fileInput.value = '';
+                    updatePreview();
+                } else {
+                    submitBtn.disabled = false;
+                }
+            };
+
+            xhr.onerror = function() {
+                progressContainer.style.display = 'none';
+                statusMessage.classList.remove('hidden');
+                statusMessage.className = 'alert alert-danger';
+                statusMessage.textContent = 'Netzwerkfehler beim Upload.';
+                submitBtn.disabled = false;
+            };
+
+            xhr.send(formData);
+        });
+    </script>
+
+</body>
+</html>

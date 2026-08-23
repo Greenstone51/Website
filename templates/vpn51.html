@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Greenstone51 // VPN Dashboard</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="stylesheet" href="/static/style.css?v=18">
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    {
+      "@type": "ListItem",
+      "position": 1,
+      "name": "greenstone51.de",
+      "item": "https://greenstone51.de/"
+    },
+    {
+      "@type": "ListItem",
+      "position": 2,
+      "name": "VPN51",
+      "item": "https://greenstone51.de/vpn51"
+    }
+  ]
+}
+</script>
+</head>
+<body>
+
+    <header>
+        <a href="/" class="logo">greenstone51 // <span>vpn51</span></a>
+        <button class="hamburger" onclick="toggleMenu()" aria-label="Menü öffnen">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+        <nav class="nav-desktop">
+            <a href="/" class="nav-link">Home</a>
+            <a href="/upload" class="nav-link">Upload</a>
+            <a href="/download" class="nav-link">Download</a>
+            <a href="/vpn51" class="nav-link active">VPN</a>
+            <a href="/vpn51/admin" class="nav-link">Admin</a>
+        </nav>
+        <nav class="nav-mobile" id="navMobile">
+            <a href="/" class="nav-link">Home</a>
+            <a href="/upload" class="nav-link">Upload</a>
+            <a href="/download" class="nav-link">Download</a>
+            <a href="/vpn51" class="nav-link active">VPN Dashboard</a>
+            <a href="/vpn51/admin" class="nav-link">Admin Center</a>
+        </nav>
+    </header>
+
+    <main>
+        <div class="page-header">
+            <h1 class="page-title">VPN Dashboard</h1>
+            <p class="page-subtitle">Details über das VPN und deine Verbindung. Hier bekommst du auch das Passwort für deinen VPN-Client. Falls Sie ein Lehrer sind, halten Sie bitte Ihre Augen geschlossen und schließen Sie diese Seite, danke!</p>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h3 class="card-title">01 / Verbindungs-Status</h3>
+                <div class="metric-value" id="statusText">Prüfe...</div>
+                <p class="metric-sub" id="ipText">Deine IP: --</p>
+            </div>
+
+            <div class="card">
+                <h3 class="card-title">02 / Core Status</h3>
+                <div class="metric-value" id="vpnStatus">--</div>
+                <p class="metric-sub">Xray-Core Systemdienst</p>
+            </div>
+
+            <div class="card">
+                <h3 class="card-title">03 / Server-Auslastung</h3>
+                <div class="metric-value" id="activeUsers">0 Streams</div>
+                <p class="metric-sub">Parallele TCP-Verbindungen auf Port 443</p>
+            </div>
+
+            <div class="card">
+                <h3 class="card-title">04 / Server-Last</h3>
+                <div class="metric-row">
+                    <span>CPU: <span id="cpuVal">0%</span></span>
+                    <span>RAM: <span id="ramVal">0%</span></span>
+                </div>
+                <p class="metric-sub mt-1">Aktuelle Hardware-Auslastung</p>
+            </div>
+
+            <div class="card card-full-grid card-center">
+                <h3 class="card-title">05 / Schnellverbindung</h3>
+
+                <div id="authSection" class="auth-container">
+                    <p class="auth-desc">Dieser Bereich ist geschützt. Gib das Passwort ein:</p>
+                    <div class="password-box">
+                        <input type="password" id="vpnPwdInput" placeholder="Passwort eingeben..." onkeydown="if(event.key === 'Enter') submitPassword()" class="password-input">
+                        <button onclick="submitPassword()" class="btn-unlock">Freischalten</button>
+                    </div>
+                    <p id="loginError" class="login-error">Falsches Passwort!</p>
+                </div>
+
+                <div id="secretSection" onclick="copyConfigToClipboard()" class="secret-container">
+                    <p class="secret-desc">
+                        Scanne den QR-Code ein oder klicke hier, um den Verbindungscode direkt zu kopieren.
+                    </p>
+                    <p id="qrNoteText" class="qr-note-text"></p>
+                    <div class="qr-wrapper">
+                        <img id="qrCodeImg" src="" alt="Lade QR-Code..." class="qr-img">
+                    </div>
+                    <div id="copyFeedback" class="copy-feedback">Code in Zwischenablage kopiert!</div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        &copy; 2026 Greenstone51. All rights reserved.
+    </footer>
+
+    <script>
+        function toggleMenu() {
+            document.getElementById('navMobile').classList.toggle('open');
+        }
+
+        let vlessConfigString = "";
+
+        function updateStats() {
+            fetch('/vpn51/api/stats')
+                .then(res => res.json())
+                .then(data => {
+                    const statusText = document.getElementById('statusText');
+                    if(data.protected) {
+                        statusText.innerHTML = '<span class="badge-protected">GESCHÜTZT</span>';
+                    } else {
+                        statusText.innerHTML = '<span class="badge-unprotected">UNGESCHÜTZT</span>';
+                    }
+                    document.getElementById('ipText').innerText = `Deine IP: ${data.client_ip} (${data.ip_type})`;
+
+                    const vpnStatus = document.getElementById('vpnStatus');
+                    vpnStatus.innerText = data.vpn_online ? "ONLINE" : "OFFLINE";
+                    vpnStatus.style.color = data.vpn_online ? "#10b981" : "var(--accent-red)";
+
+                    const streamCount = data.active_users;
+                    if (streamCount === 1) {
+                        document.getElementById('activeUsers').innerText = "1 Stream";
+                    } else {
+                        document.getElementById('activeUsers').innerText = streamCount + " Streams";
+                    }
+
+                    document.getElementById('cpuVal').innerText = data.cpu + "%";
+                    document.getElementById('ramVal').innerText = data.ram + "%";
+                })
+                .catch(err => console.error("Fehler beim Laden der API:", err));
+        }
+
+        function submitPassword() {
+            const password = document.getElementById('vpnPwdInput').value;
+            const errorText = document.getElementById('loginError');
+
+            fetch('/vpn51/api/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: password })
+            })
+            .then(res => {
+                if (res.ok) {
+                    return res.json();
+                } else {
+                    throw new Error('Unauthorized');
+                }
+            })
+            .then(data => {
+                errorText.style.display = 'none';
+                document.getElementById('authSection').style.display = 'none';
+                document.getElementById('secretSection').style.display = 'block';
+
+                if (data.note) {
+                    document.getElementById('qrNoteText').innerText = data.note;
+                }
+
+                vlessConfigString = data.vless;
+                loadQRCode();
+            })
+            .catch(err => {
+                errorText.style.display = 'block';
+                console.error("Login-Fehler:", err);
+            });
+        }
+
+        function loadQRCode() {
+            fetch('/vpn51/api/qrcode')
+                .then(res => {
+                    if (res.status === 401) return null;
+                    return res.text();
+                })
+                .then(base64Data => {
+                    if(base64Data) {
+                        document.getElementById('qrCodeImg').src = "data:image/png;base64," + base64Data;
+                    }
+                });
+        }
+
+        function copyConfigToClipboard() {
+            if(!vlessConfigString) return;
+
+            navigator.clipboard.writeText(vlessConfigString).then(() => {
+                const feedback = document.getElementById('copyFeedback');
+                feedback.style.opacity = '1';
+
+                setTimeout(() => {
+                    feedback.style.opacity = '0';
+                }, 2500);
+            }).catch(err => {
+                console.error('Fehler beim Kopieren des Codes: ', err);
+            });
+        }
+
+        updateStats();
+        setInterval(updateStats, 3000);
+    </script>
+</body>
+</html>
