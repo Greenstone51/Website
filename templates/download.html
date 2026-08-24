@@ -178,6 +178,31 @@
             return 'generic';
         }
 
+        function triggerBlobDownload(blob, filename) {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            }, 100);
+        }
+
+        async function downloadSingleFile(filename) {
+            try {
+                const response = await fetch('/download/file/' + encodeURIComponent(filename));
+                if (!response.ok) throw new Error('Download fehlgeschlagen');
+                const blob = await response.blob();
+                triggerBlobDownload(blob, filename);
+            } catch (err) {
+                alert('Fehler beim Herunterladen der Datei: ' + err.message);
+            }
+        }
+
         async function fetchFileList() {
             try {
                 const response = await fetch('/download/api/files');
@@ -255,7 +280,8 @@
                         </td>
                         <td class="file-name-cell">
                             <div class="file-name-wrapper">
-                                <a href="${fileUrl}" target="_blank" 
+                                <a href="${fileUrl}" download="${safeName}"
+                                   onclick="event.preventDefault(); downloadSingleFile('${safeName}');"
                                    onmouseenter="handleMouseEnter(event, '${fileUrl}', '${type}', '${safeName}', '${sizeFormatted}', '${dateFormatted}')"
                                    onmousemove="movePreview(event)"
                                    onmouseleave="hidePreview()"
@@ -409,8 +435,7 @@
             if (filesArray.length === 0) return;
 
             if (filesArray.length === 1) {
-                const filename = filesArray[0];
-                window.location.href = `/download/file/${encodeURIComponent(filename)}`;
+                await downloadSingleFile(filesArray[0]);
             } else {
                 try {
                     const response = await fetch('/download/zip', {
@@ -421,13 +446,7 @@
                     
                     if (response.ok) {
                         const blob = await response.blob();
-                        const downloadUrl = window.URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = downloadUrl;
-                        a.download = 'greenstone51_downloads.zip';
-                        document.body.appendChild(a);
-                        a.click();
-                        a.remove();
+                        triggerBlobDownload(blob, 'greenstone51_downloads.zip');
                     } else {
                         alert("Fehler beim Erstellen der ZIP-Datei.");
                     }
