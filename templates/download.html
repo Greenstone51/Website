@@ -178,6 +178,48 @@
             return 'generic';
         }
 
+        function getMimeType(filename) {
+            const ext = filename.includes('.') ? filename.split('.').pop().toLowerCase() : '';
+            const mimeTypes = {
+                'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'png': 'image/png', 'gif': 'image/gif',
+                'webp': 'image/webp', 'svg': 'image/svg+xml', 'bmp': 'image/bmp', 'ico': 'image/x-icon',
+                'txt': 'text/plain', 'log': 'text/plain', 'cfg': 'text/plain', 'conf': 'text/plain',
+                'ini': 'text/plain', 'md': 'text/plain', 'json': 'application/json', 'py': 'text/plain',
+                'sh': 'text/plain', 'css': 'text/css', 'html': 'text/html', 'js': 'application/javascript',
+                'pdf': 'application/pdf', 'xml': 'text/xml', 'csv': 'text/csv', 'mp4': 'video/mp4',
+                'webm': 'video/webm', 'mp3': 'audio/mpeg', 'wav': 'audio/wav'
+            };
+            return mimeTypes[ext] || 'application/octet-stream';
+        }
+
+        async function openInBrowser(e, encodedFilename) {
+            e.preventDefault();
+            const filename = decodeURIComponent(encodedFilename);
+            const newTab = window.open('about:blank', '_blank');
+            if (newTab) {
+                newTab.document.write('<html><head><title>Lade ' + escapeHtml(filename) + '...</title></head><body style="background:#111;color:#fff;font-family:sans-serif;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;">Lade Datei...</body></html>');
+            }
+
+            try {
+                const response = await fetch('/download/file/' + encodeURIComponent(filename));
+                if (!response.ok) throw new Error('Fehler beim Abrufen der Datei.');
+
+                const rawBlob = await response.blob();
+                const mimeType = getMimeType(filename);
+                const typedBlob = new Blob([rawBlob], { type: mimeType });
+                const blobUrl = URL.createObjectURL(typedBlob);
+
+                if (newTab) {
+                    newTab.location.href = blobUrl;
+                } else {
+                    window.open(blobUrl, '_blank');
+                }
+            } catch (err) {
+                if (newTab) newTab.close();
+                alert('Fehler beim Öffnen der Datei: ' + err.message);
+            }
+        }
+
         function triggerBlobDownload(blob, filename) {
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -272,6 +314,7 @@
                 const sizeFormatted = formatBytes(file.size);
                 const dateFormatted = formatDate(file.mtime);
                 const safeName = escapeHtml(file.name);
+                const encodedName = encodeURIComponent(file.name);
 
                 html += `
                     <tr class="file-row">
@@ -281,10 +324,11 @@
                         <td class="file-name-cell">
                             <div class="file-name-wrapper">
                                 <a href="${fileUrl}" target="_blank"
+                                   onclick="openInBrowser(event, '${encodedName}')"
                                    onmouseenter="handleMouseEnter(event, '${fileUrl}', '${type}', '${safeName}', '${sizeFormatted}', '${dateFormatted}')"
                                    onmousemove="movePreview(event)"
                                    onmouseleave="hidePreview()"
-                                   class="file-link">${file.name}</a>
+                                   class="file-link">${safeName}</a>
                                 <button class="btn-preview-mobile" onclick="openTouchPreview(event, '${fileUrl}', '${type}', '${safeName}', '${sizeFormatted}', '${dateFormatted}')"><img src="/static/preview-btn.svg" alt="Vorschau"></button>
                             </div>
                         </td>
