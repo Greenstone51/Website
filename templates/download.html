@@ -61,7 +61,7 @@
     <main>
         <div class="page-header">
             <h1 class="page-title">Datei-Download</h1>
-            <p class="page-subtitle" id="pageSubtitle">Klicke eine Datei an zum Herunterladen oder fahre mit der Maus darüber für eine Vorschau.</p>
+            <p class="page-subtitle" id="pageSubtitle">Klicke eine Datei an zum Öffnen oder fahre mit der Maus darüber für eine Vorschau.</p>
         </div>
 
         <div class="card card-full">
@@ -123,9 +123,9 @@
 
         if (isRealTouchDevice) {
             document.body.classList.add('touch-device');
-            pageSubtitle.textContent = 'Tippe eine Datei an zum Herunterladen oder nutze den Vorschau-Button für eine Vorschau.';
+            pageSubtitle.textContent = 'Tippe eine Datei an zum Öffnen oder nutze den Vorschau-Button für eine Vorschau.';
         } else {
-            pageSubtitle.textContent = 'Klicke eine Datei an zum Herunterladen oder fahre mit der Maus darüber für eine Vorschau.';
+            pageSubtitle.textContent = 'Klicke eine Datei an zum Öffnen oder fahre mit der Maus darüber für eine Vorschau.';
         }
 
         const supportsHover = window.matchMedia('(hover: hover)').matches && !isRealTouchDevice;
@@ -280,8 +280,7 @@
                         </td>
                         <td class="file-name-cell">
                             <div class="file-name-wrapper">
-                                <a href="${fileUrl}" download="${safeName}"
-                                   onclick="event.preventDefault(); downloadSingleFile('${safeName}');"
+                                <a href="${fileUrl}" target="_blank"
                                    onmouseenter="handleMouseEnter(event, '${fileUrl}', '${type}', '${safeName}', '${sizeFormatted}', '${dateFormatted}')"
                                    onmousemove="movePreview(event)"
                                    onmouseleave="hidePreview()"
