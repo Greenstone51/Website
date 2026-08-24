@@ -205,7 +205,7 @@ def download_file(filename):
         return send_from_directory(
             app.config['DOWNLOAD_FOLDER'],
             filename,
-            as_attachment=False
+            as_attachment=True
         )
     except FileNotFoundError:
         abort(404)
