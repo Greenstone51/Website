@@ -8,6 +8,6 @@
       .slash { fill: #ff0037; } 
     }
   </style>
-  <path class="slash" d="M35,15 L15,85 L25,85 L45,15 Z" />
-  <path class="slash" d="M65,15 L45,85 L55,85 L75,15 Z" />
+  <path class="slash" d="M40,15 L20,85 L30,85 L50,15 Z" />
+  <path class="slash" d="M70,15 L50,85 L60,85 L80,15 Z" />
 </svg>
