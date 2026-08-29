@@ -194,12 +194,12 @@ def send_web_push_notifications(title, message, target_url="/download"):
     try:
         from pywebpush import webpush, WebPushException
     except ImportError as e:
-        print(f"[Push Import Error] {e}")
+        print(f"[Push Import Fehler] {e}", flush=True)
         return
 
     subscriptions = load_push_subscriptions()
+    print(f"[Push] Geladene Abonnements: {len(subscriptions)}", flush=True)
     if not subscriptions:
-        print("[Push] Keine aktiven Subscriptions vorhanden.")
         return
 
     priv_key = VAPID_PRIVATE_KEY
@@ -207,7 +207,7 @@ def send_web_push_notifications(title, message, target_url="/download"):
         priv_key = os.path.join(BASE_DIR, priv_key)
 
     if not os.path.exists(priv_key):
-        print(f"[Push Fehler] Private Key nicht gefunden unter: {priv_key}")
+        print(f"[Push Fehler] Private Key nicht gefunden unter: {priv_key}", flush=True)
         return
 
     payload = json.dumps({
@@ -221,23 +221,23 @@ def send_web_push_notifications(title, message, target_url="/download"):
 
     for sub in subscriptions:
         try:
-            webpush(
+            res = webpush(
                 subscription_info=sub,
                 data=payload,
                 vapid_private_key=priv_key,
                 vapid_claims={"sub": VAPID_CLAIM_EMAIL}
             )
             remaining_subscriptions.append(sub)
-            print(f"[Push Erfolg] Gesendet an Endpunkt: {sub.get('endpoint', '')[:40]}...")
+            print(f"[Push Erfolg] Status {res.status_code} fuer Endpunkt: {sub.get('endpoint', '')[:40]}...", flush=True)
         except WebPushException as ex:
+            print(f"[Push WebPushException] {ex}", flush=True)
             if ex.response is not None and ex.response.status_code in (404, 410):
                 has_changes = True
             else:
                 remaining_subscriptions.append(sub)
-            print(f"[WebPushException] {ex}")
         except Exception as ex:
             remaining_subscriptions.append(sub)
-            print(f"[Push General Error] {ex}")
+            print(f"[Push Allgemeiner Fehler] {ex}", flush=True)
 
     if has_changes:
         save_push_subscriptions(remaining_subscriptions)
@@ -271,27 +271,30 @@ def upload_page():
         if is_rate_limited(client_id):
             abort(429)
 
-        files = request.files.getlist('files')
-        if not files or all(f.filename == '' for f in files):
-            if 'file' in request.files and request.files['file'].filename != '':
-                files = [request.files['file']]
-            else:
-                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                    return jsonify({'success': False, 'message': 'Keine Dateien empfangen.'}), 400
-                return render_template('upload.html', message="Keine Datei ausgewählt.", success=False)
+        # Sammle alle Dateien aus allen Formular-Schluesseln (files, files[], file etc.)
+        raw_files = []
+        for key in request.files:
+            raw_files.extend(request.files.getlist(key))
+
+        files = [f for f in raw_files if f and f.filename != '']
+
+        if not files:
+            print("[Upload Warning] POST empfangen, aber keine Dateien im Formular gefunden.", flush=True)
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({'success': False, 'message': 'Keine Dateien empfangen.'}), 400
+            return render_template('upload.html', message="Keine Datei ausgewählt.", success=False)
 
         count = 0
         uploaded_names = []
         for file in files:
-            if file and file.filename:
-                filename = secure_filename(file.filename)
-                if not filename:
-                    filename = "uploaded_file"
-                save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                file.save(save_path)
-                os.utime(save_path, None)
-                count += 1
-                uploaded_names.append(filename)
+            filename = secure_filename(file.filename)
+            if not filename:
+                filename = f"upload_{uuid.uuid4().hex[:8]}"
+            save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(save_path)
+            os.utime(save_path, None)
+            count += 1
+            uploaded_names.append(filename)
 
         cleanup_uploads_folder()
 
@@ -302,11 +305,8 @@ def upload_page():
             else:
                 push_body = f"{count} neue Dateien wurden hochgeladen."
             
-            threading.Thread(
-                target=send_web_push_notifications,
-                args=(push_title, push_body, "/download"),
-                daemon=True
-            ).start()
+            print(f"[Upload] {count} Datei(en) gespeichert. Starte Push-Benachrichtigung...", flush=True)
+            send_web_push_notifications(push_title, push_body, "/download")
 
         msg = f"{count} Datei(en) erfolgreich hochgeladen."
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -357,6 +357,7 @@ def push_subscribe():
     if not any(s.get('endpoint') == sub_data.get('endpoint') for s in subscriptions):
         subscriptions.append(sub_data)
         save_push_subscriptions(subscriptions)
+        print(f"[Push Subscribed] Neuer Endpunkt registriert: {sub_data.get('endpoint')[:40]}...", flush=True)
 
     return jsonify({'success': True})
 
@@ -369,6 +370,7 @@ def push_unsubscribe():
     subscriptions = load_push_subscriptions()
     new_subs = [s for s in subscriptions if s.get('endpoint') != sub_data.get('endpoint')]
     save_push_subscriptions(new_subs)
+    print(f"[Push Unsubscribed] Endpunkt entfernt: {sub_data.get('endpoint')[:40]}...", flush=True)
 
     return jsonify({'success': True})
 
