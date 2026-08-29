@@ -75,6 +75,9 @@
             </div>
 
             <div class="push-notification-banner mb-1" style="text-align: right;">
+                <div id="iosNotice" style="display: none; font-size: 0.85rem; color: #ff9800; background: rgba(255, 152, 0, 0.1); border: 1px solid rgba(255, 152, 0, 0.3); padding: 8px 12px; border-radius: 4px; text-align: left; margin-bottom: 8px;">
+                    Um Push-Benachrichtigungen auf iOS zu aktivieren: Tippe auf das Teilen-Symbol in Safari und wähle <strong>"Zum Home-Bildschirm"</strong>. Starte die Anwendung anschließend über das Icon auf dem Home-Bildschirm.
+                </div>
                 <button type="button" id="pushToggleBtn" class="btn-action" style="font-size: 0.85rem; padding: 6px 12px; display: none;" onclick="requestPushPermission()">
                     Push-Benachrichtigungen aktivieren
                 </button>
@@ -120,6 +123,7 @@
         const progressBar = document.getElementById('progressBar');
         const dragTooltip = document.getElementById('dragTooltip');
         const pushToggleBtn = document.getElementById('pushToggleBtn');
+        const iosNotice = document.getElementById('iosNotice');
 
         let selectedFiles = [];
 
@@ -299,6 +303,19 @@
         }
 
         async function checkPushSubscriptionState() {
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+                          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            const isStandalone = window.navigator.standalone === true || 
+                                 window.matchMedia('(display-mode: standalone)').matches;
+
+            if (isIOS && !isStandalone) {
+                if (pushToggleBtn) pushToggleBtn.style.display = 'none';
+                if (iosNotice) iosNotice.style.display = 'block';
+                return;
+            } else {
+                if (iosNotice) iosNotice.style.display = 'none';
+            }
+
             if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
                 return;
             }
