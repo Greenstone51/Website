@@ -1,29 +1,33 @@
 self.addEventListener('push', function(event) {
-    let data = { title: 'Greenstone51', body: 'Neuer Datei-Upload verfuegbar!', url: '/download' };
-
+    let data = {};
     if (event.data) {
         try {
             data = event.data.json();
         } catch (e) {
-            data.body = event.data.text();
+            data = { title: 'Greenstone51 Upload', body: event.data.text() };
         }
+    } else {
+        data = { title: 'Greenstone51 Upload', body: 'Neue Datei hochgeladen!' };
     }
 
     const options = {
-        body: data.body,
+        body: data.body || 'Eine neue Datei steht zum Download bereit.',
         icon: '/static/favicon.svg',
         badge: '/static/favicon.svg',
-        data: { url: data.url || '/download' }
+        vibrate: [100, 50, 100],
+        data: {
+            url: data.url || '/download'
+        }
     };
 
     event.waitUntil(
-        self.registration.showNotification(data.title, options)
+        self.registration.showNotification(data.title || 'Greenstone51 Upload', options)
     );
 });
 
 self.addEventListener('notificationclick', function(event) {
     event.notification.close();
-    const targetUrl = event.notification.data ? event.notification.data.url : '/download';
+    const targetUrl = event.notification.data && event.notification.data.url ? event.notification.data.url : '/download';
 
     event.waitUntil(
         clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
