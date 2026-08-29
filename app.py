@@ -40,11 +40,12 @@ VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
 VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "private_key.pem")
 VAPID_CLAIM_EMAIL = os.getenv("VAPID_CLAIM_EMAIL", "mailto:admin@greenstone51.de")
 
-UPLOAD_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), 'uploads'))
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+UPLOAD_FOLDER = os.path.abspath(os.path.join(BASE_DIR, 'uploads'))
 DOWNLOAD_FOLDER = UPLOAD_FOLDER
-CLEANUP_STATE_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), '.cleanup_state.json'))
+CLEANUP_STATE_FILE = os.path.abspath(os.path.join(BASE_DIR, '.cleanup_state.json'))
 PROTECTED_FILES_LIST = os.path.abspath(os.path.join(UPLOAD_FOLDER, '.protected_files.json'))
-PUSH_SUBSCRIPTIONS_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), 'push_subscriptions.json'))
+PUSH_SUBSCRIPTIONS_FILE = os.path.abspath(os.path.join(BASE_DIR, 'push_subscriptions.json'))
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['DOWNLOAD_FOLDER'] = DOWNLOAD_FOLDER
@@ -198,11 +199,16 @@ def send_web_push_notifications(title, message, target_url="/download"):
 
     subscriptions = load_push_subscriptions()
     if not subscriptions:
+        print("[Push] Keine aktiven Subscriptions vorhanden.")
         return
 
     priv_key = VAPID_PRIVATE_KEY
-    if os.path.exists(priv_key):
-        priv_key = os.path.abspath(priv_key)
+    if not os.path.isabs(priv_key):
+        priv_key = os.path.join(BASE_DIR, priv_key)
+
+    if not os.path.exists(priv_key):
+        print(f"[Push Fehler] Private Key nicht gefunden unter: {priv_key}")
+        return
 
     payload = json.dumps({
         "title": title,
@@ -222,6 +228,7 @@ def send_web_push_notifications(title, message, target_url="/download"):
                 vapid_claims={"sub": VAPID_CLAIM_EMAIL}
             )
             remaining_subscriptions.append(sub)
+            print(f"[Push Erfolg] Gesendet an Endpunkt: {sub.get('endpoint', '')[:40]}...")
         except WebPushException as ex:
             if ex.response is not None and ex.response.status_code in (404, 410):
                 has_changes = True
