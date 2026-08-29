@@ -284,12 +284,41 @@ def upload_page():
                 return jsonify({'success': False, 'message': 'Keine Dateien empfangen.'}), 400
             return render_template('upload.html', message="Keine Datei ausgewählt.", success=False)
 
+        custom_name_raw = request.form.get('custom_name', '').strip()
+
         count = 0
         uploaded_names = []
-        for file in files:
-            filename = secure_filename(file.filename)
-            if not filename:
-                filename = f"upload_{uuid.uuid4().hex[:8]}"
+        total_files = len(files)
+
+        for idx, file in enumerate(files):
+            orig_filename = secure_filename(file.filename)
+            if not orig_filename:
+                orig_filename = f"upload_{uuid.uuid4().hex[:8]}"
+            
+            _, ext = os.path.splitext(orig_filename)
+
+            if custom_name_raw:
+                clean_custom = secure_filename(custom_name_raw)
+                if not clean_custom:
+                    clean_custom = f"upload_{uuid.uuid4().hex[:8]}"
+                
+                # Prüfen, ob im benutzerdefinierten Namen bereits eine Dateiendung enthalten ist
+                custom_base, custom_ext = os.path.splitext(clean_custom)
+                if not custom_ext and ext:
+                    file_ext = ext
+                    base_name = clean_custom
+                else:
+                    file_ext = custom_ext
+                    base_name = custom_base
+
+                # Bei mehreren Dateien wird ein Index angehängt, um Namenskonflikte zu vermeiden
+                if total_files > 1:
+                    filename = f"{base_name}_{idx + 1}{file_ext}"
+                else:
+                    filename = f"{base_name}{file_ext}"
+            else:
+                filename = orig_filename
+
             save_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(save_path)
             os.utime(save_path, None)
