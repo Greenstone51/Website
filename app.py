@@ -192,7 +192,8 @@ def save_push_subscriptions(subscriptions):
 def send_web_push_notifications(title, message, target_url="/download"):
     try:
         from pywebpush import webpush, WebPushException
-    except ImportError:
+    except ImportError as e:
+        print(f"[Push Import Error] {e}")
         return
 
     subscriptions = load_push_subscriptions()
@@ -226,8 +227,10 @@ def send_web_push_notifications(title, message, target_url="/download"):
                 has_changes = True
             else:
                 remaining_subscriptions.append(sub)
-        except Exception:
+            print(f"[WebPushException] {ex}")
+        except Exception as ex:
             remaining_subscriptions.append(sub)
+            print(f"[Push General Error] {ex}")
 
     if has_changes:
         save_push_subscriptions(remaining_subscriptions)
