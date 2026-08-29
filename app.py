@@ -33,13 +33,18 @@ XRAY_INTERNAL_PORT = 443
 
 # Konfigurationen aus den Umgebungsvariablen abrufen
 VLESS_LINK = os.getenv("VLESS_LINK", "https://greenstone51.de/404")
-
 QR_CODE_NOTE = os.getenv("QR_CODE_NOTE", "Environment Variablen konnten nicht geladen werden. Kontaktiere den Systemadministrator via Email unter admin@greenstone51.de.")
+
+# VAPID Keys fuer Web Push
+VAPID_PUBLIC_KEY = os.getenv("VAPID_PUBLIC_KEY", "")
+VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "private_key.pem")
+VAPID_CLAIM_EMAIL = os.getenv("VAPID_CLAIM_EMAIL", "mailto:admin@greenstone51.de")
 
 UPLOAD_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), 'uploads'))
 DOWNLOAD_FOLDER = UPLOAD_FOLDER
 CLEANUP_STATE_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), '.cleanup_state.json'))
 PROTECTED_FILES_LIST = os.path.abspath(os.path.join(UPLOAD_FOLDER, '.protected_files.json'))
+PUSH_SUBSCRIPTIONS_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), 'push_subscriptions.json'))
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['DOWNLOAD_FOLDER'] = DOWNLOAD_FOLDER
@@ -95,11 +100,6 @@ def cleanup_uploads_folder():
 # ================= AUTOMATISCHE 14-TAGE LÖSCHUNG =================
 
 def is_file_protected(filename, filepath):
-    """
-    Schnittstelle fuer geschuetzte Dateien.
-    Ignoriert versteckte Dateien (beginnend mit '.') und vergleicht mit der Liste
-    in uploads/.protected_files.json.
-    """
     if filename.startswith('.'):
         return True
 
@@ -120,7 +120,6 @@ def biweekly_sunday_cleanup():
         return
 
     now = datetime.now()
-    # 0 = Montag, 1 = Dienstag, ..., 6 = Sonntag
     if now.weekday() != 6:
         return
 
@@ -138,13 +137,11 @@ def biweekly_sunday_cleanup():
     if last_cleanup_str:
         try:
             last_cleanup_date = datetime.strptime(last_cleanup_str, '%Y-%m-%d')
-            # Wenn die letzte Loeschung weniger als 12 Tage her ist, wird heute uebersprungen
             if (now - last_cleanup_date).days < 12:
                 return
         except ValueError:
             pass
 
-    # Dateien loeschen, die nicht geschuetzt sind
     for fname in os.listdir(folder):
         fpath = os.path.join(folder, fname)
         if os.path.isfile(fpath):
@@ -154,7 +151,6 @@ def biweekly_sunday_cleanup():
                 except OSError:
                     pass
 
-    # Status mit dem heutigen Datum aktualisieren
     try:
         with open(CLEANUP_STATE_FILE, 'w', encoding='utf-8') as f:
             json.dump({'last_cleanup_date': today_str}, f)
@@ -168,18 +164,85 @@ def start_scheduled_cleanup():
                 biweekly_sunday_cleanup()
             except Exception:
                 pass
-            time.sleep(3600)  # Einmal pro Stunde pruefen
+            time.sleep(3600)
 
     thread = threading.Thread(target=loop, daemon=True)
     thread.start()
 
 start_scheduled_cleanup()
 
+# ================= WEB PUSH HELFER =================
+
+def load_push_subscriptions():
+    if os.path.exists(PUSH_SUBSCRIPTIONS_FILE):
+        try:
+            with open(PUSH_SUBSCRIPTIONS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            return []
+    return []
+
+def save_push_subscriptions(subscriptions):
+    try:
+        with open(PUSH_SUBSCRIPTIONS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(subscriptions, f, indent=2)
+    except Exception:
+        pass
+
+def send_web_push_notifications(title, message, target_url="/download"):
+    try:
+        from pywebpush import webpush, WebPushException
+    except ImportError:
+        return
+
+    subscriptions = load_push_subscriptions()
+    if not subscriptions:
+        return
+
+    priv_key = VAPID_PRIVATE_KEY
+    if os.path.exists(priv_key):
+        priv_key = os.path.abspath(priv_key)
+
+    payload = json.dumps({
+        "title": title,
+        "body": message,
+        "url": target_url
+    })
+
+    remaining_subscriptions = []
+    has_changes = False
+
+    for sub in subscriptions:
+        try:
+            webpush(
+                subscription_info=sub,
+                data=payload,
+                vapid_private_key=priv_key,
+                vapid_claims={"sub": VAPID_CLAIM_EMAIL}
+            )
+            remaining_subscriptions.append(sub)
+        except WebPushException as ex:
+            if ex.response is not None and ex.response.status_code in (404, 410):
+                has_changes = True
+            else:
+                remaining_subscriptions.append(sub)
+        except Exception:
+            remaining_subscriptions.append(sub)
+
+    if has_changes:
+        save_push_subscriptions(remaining_subscriptions)
+
 # ================= ROUTES =================
 
 @app.route('/')
 def root_page():
     return render_template('index.html')
+
+@app.route('/sw.js')
+def service_worker():
+    response = send_from_directory(app.static_folder, 'sw.js')
+    response.headers['Service-Worker-Allowed'] = '/'
+    return response
 
 @app.route('/robots.txt')
 @app.route('/sitemap.xml')
@@ -208,6 +271,7 @@ def upload_page():
                 return render_template('upload.html', message="Keine Datei ausgewählt.", success=False)
 
         count = 0
+        uploaded_names = []
         for file in files:
             if file and file.filename:
                 filename = secure_filename(file.filename)
@@ -217,8 +281,22 @@ def upload_page():
                 file.save(save_path)
                 os.utime(save_path, None)
                 count += 1
+                uploaded_names.append(filename)
 
         cleanup_uploads_folder()
+
+        if count > 0:
+            push_title = "Neuer Datei-Upload"
+            if count == 1:
+                push_body = f"Datei '{uploaded_names[0]}' wurde hochgeladen."
+            else:
+                push_body = f"{count} neue Dateien wurden hochgeladen."
+            
+            threading.Thread(
+                target=send_web_push_notifications,
+                args=(push_title, push_body, "/download"),
+                daemon=True
+            ).start()
 
         msg = f"{count} Datei(en) erfolgreich hochgeladen."
         if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
@@ -252,6 +330,37 @@ def logout():
     session.pop('logged_in', None)
     session.pop('qr_access', None)
     return redirect(url_for('admin_page'))
+
+# ================= PUSH SUBSCRIPTION API =================
+
+@app.route('/api/push/public-key', methods=['GET'])
+def get_push_public_key():
+    return jsonify({'publicKey': VAPID_PUBLIC_KEY})
+
+@app.route('/api/push/subscribe', methods=['POST'])
+def push_subscribe():
+    sub_data = request.get_json()
+    if not sub_data or 'endpoint' not in sub_data:
+        return jsonify({'success': False, 'message': 'Ungueltige Subscription-Daten.'}), 400
+
+    subscriptions = load_push_subscriptions()
+    if not any(s.get('endpoint') == sub_data.get('endpoint') for s in subscriptions):
+        subscriptions.append(sub_data)
+        save_push_subscriptions(subscriptions)
+
+    return jsonify({'success': True})
+
+@app.route('/api/push/unsubscribe', methods=['POST'])
+def push_unsubscribe():
+    sub_data = request.get_json()
+    if not sub_data or 'endpoint' not in sub_data:
+        return jsonify({'success': False, 'message': 'Ungueltige Subscription-Daten.'}), 400
+
+    subscriptions = load_push_subscriptions()
+    new_subs = [s for s in subscriptions if s.get('endpoint') != sub_data.get('endpoint')]
+    save_push_subscriptions(new_subs)
+
+    return jsonify({'success': True})
 
 # ================= ERROR HANDLER =================
 
