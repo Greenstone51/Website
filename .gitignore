@@ -3,3 +3,4 @@ uploads/
 __pycache__/
 *.pyc
 .venv/
+.cleanup_state.json
