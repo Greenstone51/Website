@@ -1,7 +1,8 @@
 {
   "name": "Greenstone51",
   "short_name": "Greenstone51",
-  "start_url": "/",
+  "start_url": "/upload",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#121212",
   "theme_color": "#121212",
