@@ -28,9 +28,9 @@ def test_push():
         priv_key = os.path.abspath(priv_key)
 
     payload = json.dumps({
-        "title": "Test Benachrichtigung",
+        "title": "Test Benachrichtigung // Greenstone51",
         "body": "Dies ist ein direkter Test vom Server.",
-        "url": "/download"
+        "url": "/404"
     })
 
     for idx, sub in enumerate(subscriptions):
