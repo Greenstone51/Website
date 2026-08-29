@@ -14,7 +14,7 @@ self.addEventListener('push', function(event) {
         body: data.body || 'Eine neue Datei steht zum Download bereit.',
         icon: '/static/favicon.svg',
         badge: '/static/favicon.svg',
-        vibrate: [100, 50, 100],
+        vibrate: [80, 40, 500, 40, 80],
         data: {
             url: data.url || '/download'
         }
