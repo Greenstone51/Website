@@ -274,6 +274,59 @@
 
             xhr.send(formData);
         });
+
+        // ================= BROWSER WEB PUSH REGISTRIERUNG =================
+        function urlBase64ToUint8Array(base64String) {
+            const padding = '='.repeat((4 - base64String.length % 4) % 4);
+            const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+            const rawData = window.atob(base64);
+            const outputArray = new Uint8Array(rawData.length);
+            for (let i = 0; i < rawData.length; ++i) {
+                outputArray[i] = rawData.charCodeAt(i);
+            }
+            return outputArray;
+        }
+
+        async function initWebPush() {
+            if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+                return;
+            }
+
+            try {
+                const reg = await navigator.serviceWorker.register('/sw.js');
+
+                if (Notification.permission === 'default') {
+                    const permission = await Notification.requestPermission();
+                    if (permission !== 'granted') return;
+                }
+
+                if (Notification.permission === 'granted') {
+                    const response = await fetch('/api/push/public-key');
+                    const keyData = await response.json();
+                    if (!keyData.publicKey) return;
+
+                    const applicationServerKey = urlBase64ToUint8Array(keyData.publicKey);
+                    
+                    let subscription = await reg.pushManager.getSubscription();
+                    if (!subscription) {
+                        subscription = await reg.pushManager.subscribe({
+                            userVisibleOnly: true,
+                            applicationServerKey: applicationServerKey
+                        });
+                    }
+
+                    await fetch('/api/push/subscribe', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(subscription)
+                    });
+                }
+            } catch (err) {
+                console.error('Web Push Fehler:', err);
+            }
+        }
+
+        window.addEventListener('load', initWebPush);
     </script>
 
 </body>
