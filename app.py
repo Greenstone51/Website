@@ -28,7 +28,7 @@ ADMIN_PASSWORD_HASH = "scrypt:32768:8:1$x2s5iN4SeE7BBcFa$1cb3f962e8b85692cfae9b2
 QUICK_CONNECT_PASSWORD_HASH = "scrypt:32768:8:1$Q8YJGxZrMFVkJmkf$b1e6267187f71ab8117a620ee8ebcf304d9c43f8cde1e53b2c2c398663db4344f64c2de988124fda25e8ae838c702006fdb5515eab40022b0e18cee12e9fff86"
 
 VPN_SERVICE_NAME = "xray"
-API_SERVICE_NAME = "vpn51.service"
+API_SERVICE_NAME = "website-backend.service"
 XRAY_INTERNAL_PORT = 443
 
 # Konfigurationen aus den Umgebungsvariablen abrufen
