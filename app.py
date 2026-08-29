@@ -3,11 +3,14 @@ import io
 import time
 import uuid
 import base64
+import json
+import threading
 import subprocess
 import requests
 import psutil
 import zipfile
 import mimetypes
+from datetime import datetime, timedelta
 from collections import defaultdict
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, send_from_directory, send_file, abort
 from werkzeug.security import check_password_hash
@@ -35,6 +38,9 @@ QR_CODE_NOTE = os.getenv("QR_CODE_NOTE", "Environment Variablen konnten nicht ge
 
 UPLOAD_FOLDER = os.path.abspath(os.path.join(os.path.dirname(__file__), 'uploads'))
 DOWNLOAD_FOLDER = UPLOAD_FOLDER
+CLEANUP_STATE_FILE = os.path.abspath(os.path.join(os.path.dirname(__file__), '.cleanup_state.json'))
+PROTECTED_FILES_LIST = os.path.abspath(os.path.join(UPLOAD_FOLDER, '.protected_files.json'))
+
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['DOWNLOAD_FOLDER'] = DOWNLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100 MB
@@ -79,10 +85,95 @@ def cleanup_uploads_folder():
         files.sort(key=os.path.getmtime)
         files_to_delete = files[:len(files) - 50]
         for fpath in files_to_delete:
+            fname = os.path.basename(fpath)
+            if not is_file_protected(fname, fpath):
+                try:
+                    os.remove(fpath)
+                except OSError:
+                    pass
+
+# ================= AUTOMATISCHE 14-TAGE LÖSCHUNG =================
+
+def is_file_protected(filename, filepath):
+    """
+    Schnittstelle fuer geschuetzte Dateien.
+    Ignoriert versteckte Dateien (beginnend mit '.') und vergleicht mit der Liste
+    in uploads/.protected_files.json.
+    """
+    if filename.startswith('.'):
+        return True
+
+    if os.path.exists(PROTECTED_FILES_LIST):
+        try:
+            with open(PROTECTED_FILES_LIST, 'r', encoding='utf-8') as f:
+                protected_files = json.load(f)
+                if isinstance(protected_files, list) and filename in protected_files:
+                    return True
+        except Exception:
+            pass
+
+    return False
+
+def biweekly_sunday_cleanup():
+    folder = app.config['UPLOAD_FOLDER']
+    if not os.path.exists(folder):
+        return
+
+    now = datetime.now()
+    # 0 = Montag, 1 = Dienstag, ..., 6 = Sonntag
+    if now.weekday() != 6:
+        return
+
+    today_str = now.strftime('%Y-%m-%d')
+    last_cleanup_str = None
+
+    if os.path.exists(CLEANUP_STATE_FILE):
+        try:
+            with open(CLEANUP_STATE_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                last_cleanup_str = data.get('last_cleanup_date')
+        except Exception:
+            pass
+
+    if last_cleanup_str:
+        try:
+            last_cleanup_date = datetime.strptime(last_cleanup_str, '%Y-%m-%d')
+            # Wenn die letzte Loeschung weniger als 12 Tage her ist, wird heute uebersprungen
+            if (now - last_cleanup_date).days < 12:
+                return
+        except ValueError:
+            pass
+
+    # Dateien loeschen, die nicht geschuetzt sind
+    for fname in os.listdir(folder):
+        fpath = os.path.join(folder, fname)
+        if os.path.isfile(fpath):
+            if not is_file_protected(fname, fpath):
+                try:
+                    os.remove(fpath)
+                except OSError:
+                    pass
+
+    # Status mit dem heutigen Datum aktualisieren
+    try:
+        with open(CLEANUP_STATE_FILE, 'w', encoding='utf-8') as f:
+            json.dump({'last_cleanup_date': today_str}, f)
+    except Exception:
+        pass
+
+def start_scheduled_cleanup():
+    def loop():
+        while True:
             try:
-                os.remove(fpath)
-            except OSError:
+                biweekly_sunday_cleanup()
+            except Exception:
                 pass
+            time.sleep(3600)  # Einmal pro Stunde pruefen
+
+    thread = threading.Thread(target=loop, daemon=True)
+    thread.start()
+
+start_scheduled_cleanup()
 
 # ================= ROUTES =================
 
@@ -190,7 +281,7 @@ def api_list_files():
     if os.path.exists(folder):
         for fname in os.listdir(folder):
             fpath = os.path.join(folder, fname)
-            if os.path.isfile(fpath):
+            if os.path.isfile(fpath) and not fname.startswith('.'):
                 stat = os.stat(fpath)
                 file_list.append({
                     'name': fname,
