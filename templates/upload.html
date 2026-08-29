@@ -70,6 +70,12 @@
                 {{ message }}
             </div>
 
+            <div class="push-notification-banner mb-1" style="text-align: right;">
+                <button type="button" id="pushToggleBtn" class="btn-action" style="font-size: 0.85rem; padding: 6px 12px; display: none;" onclick="requestPushPermission()">
+                    Push-Benachrichtigungen aktivieren
+                </button>
+            </div>
+
             <form id="uploadForm" action="/upload" method="POST" enctype="multipart/form-data">
                 <input type="file" id="fileInput" name="files" multiple class="file-input-hidden" onchange="handleFileSelect(this.files)">
                 
@@ -109,6 +115,7 @@
         const progressContainer = document.getElementById('progressContainer');
         const progressBar = document.getElementById('progressBar');
         const dragTooltip = document.getElementById('dragTooltip');
+        const pushToggleBtn = document.getElementById('pushToggleBtn');
 
         let selectedFiles = [];
 
@@ -287,46 +294,64 @@
             return outputArray;
         }
 
-        async function initWebPush() {
+        async function checkPushSubscriptionState() {
             if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
                 return;
             }
 
-            try {
-                const reg = await navigator.serviceWorker.register('/sw.js');
-
-                if (Notification.permission === 'default') {
-                    const permission = await Notification.requestPermission();
-                    if (permission !== 'granted') return;
-                }
-
-                if (Notification.permission === 'granted') {
-                    const response = await fetch('/api/push/public-key');
-                    const keyData = await response.json();
-                    if (!keyData.publicKey) return;
-
-                    const applicationServerKey = urlBase64ToUint8Array(keyData.publicKey);
-                    
-                    let subscription = await reg.pushManager.getSubscription();
-                    if (!subscription) {
-                        subscription = await reg.pushManager.subscribe({
-                            userVisibleOnly: true,
-                            applicationServerKey: applicationServerKey
-                        });
-                    }
-
-                    await fetch('/api/push/subscribe', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(subscription)
-                    });
-                }
-            } catch (err) {
-                console.error('Web Push Fehler:', err);
+            if (Notification.permission === 'granted') {
+                pushToggleBtn.style.display = 'inline-block';
+                pushToggleBtn.textContent = 'Push-Benachrichtigungen aktiv';
+                pushToggleBtn.disabled = true;
+                pushToggleBtn.style.opacity = '0.7';
+                await registerPushSubscription();
+            } else if (Notification.permission === 'default') {
+                pushToggleBtn.style.display = 'inline-block';
+                pushToggleBtn.textContent = 'Push-Benachrichtigungen aktivieren';
+                pushToggleBtn.disabled = false;
+                pushToggleBtn.style.opacity = '1';
             }
         }
 
-        window.addEventListener('load', initWebPush);
+        async function requestPushPermission() {
+            if (!('Notification' in window)) return;
+            const permission = await Notification.requestPermission();
+            if (permission === 'granted') {
+                pushToggleBtn.textContent = 'Push-Benachrichtigungen aktiv';
+                pushToggleBtn.disabled = true;
+                pushToggleBtn.style.opacity = '0.7';
+                await registerPushSubscription();
+            }
+        }
+
+        async function registerPushSubscription() {
+            try {
+                const reg = await navigator.serviceWorker.register('/sw.js');
+                const response = await fetch('/api/push/public-key');
+                const keyData = await response.json();
+                if (!keyData.publicKey) return;
+
+                const applicationServerKey = urlBase64ToUint8Array(keyData.publicKey);
+                let subscription = await reg.pushManager.getSubscription();
+
+                if (!subscription) {
+                    subscription = await reg.pushManager.subscribe({
+                        userVisibleOnly: true,
+                        applicationServerKey: applicationServerKey
+                    });
+                }
+
+                await fetch('/api/push/subscribe', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(subscription)
+                });
+            } catch (err) {
+                console.error('Push Registrierungsfehler:', err);
+            }
+        }
+
+        window.addEventListener('load', checkPushSubscriptionState);
     </script>
 
 </body>
