@@ -194,7 +194,7 @@ def send_web_push_notifications(title, message, target_url="/download"):
     try:
         from pywebpush import webpush, WebPushException
     except ImportError as e:
-        print(f"[Push Import Fehler] {e}", flush=True)
+        print(f"[Push Fehler] {e}", flush=True)
         return
 
     subscriptions = load_push_subscriptions()
@@ -271,7 +271,6 @@ def upload_page():
         if is_rate_limited(client_id):
             abort(429)
 
-        # Sammle alle Dateien aus allen Formular-Schluesseln (files, files[], file etc.)
         raw_files = []
         for key in request.files:
             raw_files.extend(request.files.getlist(key))
@@ -302,7 +301,6 @@ def upload_page():
                 if not clean_custom:
                     clean_custom = f"upload_{uuid.uuid4().hex[:8]}"
                 
-                # Prüfen, ob im benutzerdefinierten Namen bereits eine Dateiendung enthalten ist
                 custom_base, custom_ext = os.path.splitext(clean_custom)
                 if not custom_ext and ext:
                     file_ext = ext
@@ -311,7 +309,6 @@ def upload_page():
                     file_ext = custom_ext
                     base_name = custom_base
 
-                # Bei mehreren Dateien wird ein Index angehängt, um Namenskonflikte zu vermeiden
                 if total_files > 1:
                     filename = f"{base_name}_{idx + 1}{file_ext}"
                 else:
@@ -348,6 +345,59 @@ def upload_page():
 @app.route('/download')
 def download_page():
     return render_template('download.html')
+
+# ==============================================================================
+# TEMPORÄRE ROUTE: /religion (ANFANG) - Kann nach Nutzung komplett gelöscht werden
+# ==============================================================================
+
+RELIGION_JSON_FILE = os.path.join(BASE_DIR, 'religion_songs.json')
+
+def load_religion_songs():
+    if os.path.exists(RELIGION_JSON_FILE):
+        try:
+            with open(RELIGION_JSON_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            return []
+    return []
+
+def save_religion_songs(songs):
+    try:
+        with open(RELIGION_JSON_FILE, 'w', encoding='utf-8') as f:
+            json.dump(songs, f, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
+
+@app.route('/religion', methods=['GET', 'POST'])
+def religion_page():
+    message = None
+    success = False
+
+    if request.method == 'POST':
+        title = request.form.get('title', '').strip()
+        author = request.form.get('author', '').strip()
+
+        if title and author:
+            songs = load_religion_songs()
+            new_entry = {
+                'id': uuid.uuid4().hex[:8],
+                'title': title,
+                'author': author,
+                'timestamp': datetime.now().strftime('%d.%m.%Y %H:%M')
+            }
+            songs.insert(0, new_entry)
+            save_religion_songs(songs)
+            return redirect(url_for('religion_page'))
+        else:
+            message = "Bitte sowohl den Songtitel als auch den Autor/Künstler eintragen."
+            success = False
+
+    songs = load_religion_songs()
+    return render_template('religion.html', songs=songs, message=message, success=success)
+
+# ==============================================================================
+# TEMPORÄRE ROUTE: /religion (ENDE)
+# ==============================================================================
 
 @app.route('/vpn51/admin', methods=['GET', 'POST'])
 def admin_page():
