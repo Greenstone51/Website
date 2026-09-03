@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Greenstone51 // Religionsunterricht</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="stylesheet" href="/static/style.css?v=7">
+</head>
+<body>
+
+    <header>
+        <a href="/" class="logo">greenstone51 //</a>
+        <button class="hamburger" onclick="toggleMenu()" aria-label="Menü öffnen">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
+        <nav class="nav-desktop">
+            <a href="/" class="nav-link">Home</a>
+            <a href="/upload" class="nav-link">Upload</a>
+            <a href="/download" class="nav-link">Download</a>
+            <a href="/religion" class="nav-link active">Religion</a>
+            <a href="/vpn51" class="nav-link">VPN</a>
+            <a href="/vpn51/admin" class="nav-link">Admin</a>
+        </nav>
+        <nav class="nav-mobile" id="navMobile">
+            <a href="/" class="nav-link">Home</a>
+            <a href="/upload" class="nav-link">Upload</a>
+            <a href="/download" class="nav-link">Download</a>
+            <a href="/religion" class="nav-link active">Religion</a>
+            <a href="/vpn51" class="nav-link">VPN Dashboard</a>
+            <a href="/vpn51/admin" class="nav-link">Admin Center</a>
+        </nav>
+    </header>
+
+    <main>
+        <div class="page-header">
+            <h1 class="page-title">Musik fuer Religion</h1>
+            <p class="page-subtitle">Trage hier Songtitel und Artist ein.</p>
+        </div>
+
+        {% if message %}
+            <div class="alert {% if success %}alert-success{% else %}alert-danger{% endif %} w-100 mb-15">
+                {{ message }}
+            </div>
+        {% endif %}
+
+        <div class="card card-upload mb-15">
+            <h3 class="card-title mb-1">Neuen Eintrag erstellen</h3>
+            <form action="/religion" method="POST">
+                <div class="form-group">
+                    <label for="title" class="form-label">Titel</label>
+                    <input type="text" id="title" name="title" class="form-input" placeholder="z. B. Say Your Prayers" required>
+                </div>
+                <div class="form-group">
+                    <label for="author" class="form-label">Artist</label>
+                    <input type="text" id="author" name="author" class="form-input" placeholder="z. B. Künstlername" required>
+                </div>
+                <button type="submit" class="btn-action w-100">Eintragen</button>
+            </form>
+        </div>
+
+        <h2 class="section-title mt-1">Eingereichte Songs ({{ songs|length }})</h2>
+        
+        {% if songs %}
+            <div class="grid">
+                {% for song in songs %}
+                    <div class="card">
+                        <h3 class="card-title">{{ song.title }}</h3>
+                        <p class="card-text"><strong>Autor:</strong> {{ song.author }}</p>
+                        <p class="metric-sub mt-1">Eingetragen am {{ song.timestamp }}</p>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="card card-full text-center">
+                <p class="card-text">Bisher wurde noch nichts eingetragen.</p>
+            </div>
+        {% endif %}
+    </main>
+
+    <footer>
+        &copy; 2026 Greenstone51. All rights reserved.
+    </footer>
+
+    <script>
+        function toggleMenu() {
+            document.getElementById('navMobile').classList.toggle('open');
+        }
+    </script>
+</body>
+</html>
