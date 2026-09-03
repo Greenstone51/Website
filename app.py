@@ -347,7 +347,7 @@ def download_page():
     return render_template('download.html')
 
 # ==============================================================================
-# TEMPORÄRE ROUTE: /religion (ANFANG) - Kann nach Nutzung komplett gelöscht werden
+# TEMPORÄRE ROUTE: /religion (ANFANG)
 # ==============================================================================
 
 RELIGION_JSON_FILE = os.path.join(BASE_DIR, 'religion_songs.json')
@@ -368,32 +368,60 @@ def save_religion_songs(songs):
     except Exception:
         pass
 
-@app.route('/religion', methods=['GET', 'POST'])
+def calculate_religion_average(songs):
+    if not songs:
+        return 0.0
+    total = sum(int(s.get('rating', 5)) for s in songs)
+    return round(total / len(songs), 1)
+
+@app.route('/religion', methods=['GET'])
 def religion_page():
-    message = None
-    success = False
+    songs = load_religion_songs()
+    avg = calculate_religion_average(songs)
+    return render_template('religion.html', songs=songs, average_rating=avg)
 
-    if request.method == 'POST':
-        title = request.form.get('title', '').strip()
-        author = request.form.get('author', '').strip()
+@app.route('/api/religion/songs', methods=['GET'])
+def api_religion_songs():
+    songs = load_religion_songs()
+    avg = calculate_religion_average(songs)
+    return jsonify({
+        'songs': songs,
+        'average_rating': avg,
+        'count': len(songs)
+    })
 
-        if title and author:
-            songs = load_religion_songs()
-            new_entry = {
-                'id': uuid.uuid4().hex[:8],
-                'title': title,
-                'author': author,
-                'timestamp': datetime.now().strftime('%d.%m.%Y %H:%M')
-            }
-            songs.insert(0, new_entry)
-            save_religion_songs(songs)
-            return redirect(url_for('religion_page'))
-        else:
-            message = "Bitte sowohl den Songtitel als auch den Autor/Künstler eintragen."
-            success = False
+@app.route('/api/religion/submit', methods=['POST'])
+def api_religion_submit():
+    data = request.get_json() or {}
+    title = str(data.get('title', '')).strip()
+    author = str(data.get('author', '')).strip()
+    try:
+        rating = int(data.get('rating', 5))
+        rating = max(1, min(10, rating))
+    except (ValueError, TypeError):
+        rating = 5
+
+    if not title or not author:
+        return jsonify({'success': False, 'message': 'Bitte sowohl Songtitel als auch Autor angeben.'}), 400
 
     songs = load_religion_songs()
-    return render_template('religion.html', songs=songs, message=message, success=success)
+    new_entry = {
+        'id': uuid.uuid4().hex[:8],
+        'title': title,
+        'author': author,
+        'rating': rating,
+        'timestamp': datetime.now().strftime('%d.%m.%Y %H:%M')
+    }
+    songs.insert(0, new_entry)
+    save_religion_songs(songs)
+
+    avg = calculate_religion_average(songs)
+    return jsonify({
+        'success': True,
+        'songs': songs,
+        'average_rating': avg,
+        'count': len(songs)
+    })
 
 # ==============================================================================
 # TEMPORÄRE ROUTE: /religion (ENDE)
