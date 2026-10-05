@@ -44,9 +44,11 @@
             <form method="POST" action="/vpn51/admin" style="display: flex; flex-direction: column; align-items: center; gap: 15px; width: 100%;">
                 <input type="password" name="password" placeholder="Admin-Passwort..." required class="password-input" style="width: 100%;">
                 
+                {% if turnstile_sitekey %}
                 <div class="cf-turnstile" data-sitekey="{{ turnstile_sitekey }}" data-theme="dark"></div>
+                {% endif %}
 
-                <button type="submit" class="btn-unlock" style="width: 100%;">Anmelden</button>
+                <button type="submit" class="btn-unlock" style="width: 100%; padding: 0.75rem 1.25rem; border-radius: 6px;">Anmelden</button>
             </form>
 
             {% if error %}
@@ -56,7 +58,7 @@
 
         {% else %}
 
-        <div class="page-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+        <div class="page-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px; width: 100%;">
             <div>
                 <h1 class="page-title">Admin Control Center</h1>
                 <p class="page-subtitle">Verwaltung von Systemdiensten, VPN-Core und Server-Status.</p>
@@ -78,11 +80,20 @@
             </div>
 
             <div class="card">
+                <h3 class="card-title">System-Auslastung</h3>
+                <div class="metric-row">
+                    <span>CPU: <span id="sysCpu">Lade...</span></span>
+                    <span>RAM: <span id="sysRam">Lade...</span></span>
+                </div>
+                <p class="metric-sub mt-1">Aktuelle Hardware-Auslastung</p>
+            </div>
+
+            <div class="card">
                 <h3 class="card-title">Xray Systemdienst</h3>
                 <div class="metric-value" id="xrayState">Lade...</div>
                 <div class="btn-group mt-1">
-                    <button onclick="execCmd('start_xray')" class="btn-action">Starten</button>
-                    <button onclick="execCmd('restart_xray')" class="btn-action">Neustarten</button>
+                    <button onclick="execCmd('start_xray')" class="btn-action btn-ctrl-start">Starten</button>
+                    <button onclick="execCmd('restart_xray')" class="btn-action btn-ctrl-restart">Neustarten</button>
                     <button onclick="execCmd('stop_xray')" class="btn-action btn-danger">Stoppen</button>
                 </div>
             </div>
@@ -91,7 +102,7 @@
                 <h3 class="card-title">Flask Web-API</h3>
                 <div class="metric-value" id="apiState">Lade...</div>
                 <div class="btn-group mt-1">
-                    <button onclick="execCmd('restart_api')" class="btn-action">Neustarten</button>
+                    <button onclick="execCmd('restart_api')" class="btn-action btn-ctrl-restart">Neustarten</button>
                     <button onclick="execCmd('stop_api')" class="btn-action btn-danger">Stoppen</button>
                 </div>
             </div>
@@ -115,23 +126,45 @@
                         return res.json();
                     })
                     .then(data => {
-                        document.getElementById('sysUptime').innerText = data.uptime;
-                        document.getElementById('sysDisk').innerText = data.disk_usage;
+                        document.getElementById('sysUptime').innerText = data.uptime || '--';
+                        document.getElementById('sysDisk').innerText = data.disk_usage || '--';
+
+                        if (data.cpu !== undefined) {
+                            document.getElementById('sysCpu').innerText = data.cpu + '%';
+                        }
+                        if (data.ram !== undefined) {
+                            document.getElementById('sysRam').innerText = data.ram + '%';
+                        }
 
                         const xrayElem = document.getElementById('xrayState');
-                        xrayElem.innerText = data.xray_status.toUpperCase();
-                        xrayElem.style.color = data.xray_status === 'active' ? '#10b981' : 'var(--accent-red)';
+                        if (xrayElem) {
+                            const xrayStatus = (data.xray_status || 'unknown').toLowerCase();
+                            xrayElem.innerText = xrayStatus.toUpperCase();
+                            xrayElem.className = 'metric-value ' + (xrayStatus === 'active' ? 'status-active' : 'status-inactive');
+                        }
 
                         const apiElem = document.getElementById('apiState');
-                        apiElem.innerText = data.api_status.toUpperCase();
-                        apiElem.style.color = data.api_status === 'active' ? '#10b981' : 'var(--accent-red)';
+                        if (apiElem) {
+                            const apiStatus = (data.api_status || 'unknown').toLowerCase();
+                            apiElem.innerText = apiStatus.toUpperCase();
+                            apiElem.className = 'metric-value ' + (apiStatus === 'active' ? 'status-active' : 'status-inactive');
+                        }
                     })
-                    .catch(err => console.error(err));
+                    .catch(err => {
+                        console.error("Fehler beim Abrufen der System-Infos:", err);
+                    });
             }
 
             function execCmd(action) {
                 if ((action === 'reboot_server' || action === 'shutdown_server') && !confirm("Bist du sicher, dass du diese Aktion ausführen willst?")) {
                     return;
+                }
+
+                const out = document.getElementById('cmdOutput');
+                if (out) {
+                    out.innerText = "Befehl wird ausgeführt...";
+                    out.style.opacity = '1';
+                    out.style.color = 'var(--text-secondary)';
                 }
 
                 fetch('/vpn51/api/admin/execute', {
@@ -141,13 +174,22 @@
                 })
                 .then(res => res.json())
                 .then(data => {
-                    const out = document.getElementById('cmdOutput');
-                    out.innerText = data.msg;
-                    out.style.opacity = '1';
-                    setTimeout(() => { out.style.opacity = '0'; }, 4000);
+                    if (out) {
+                        out.innerText = data.msg || "Aktion ausgeführt.";
+                        out.style.color = '#10b981';
+                        out.style.opacity = '1';
+                        setTimeout(() => { out.style.opacity = '0'; }, 4000);
+                    }
                     setTimeout(fetchSysInfo, 1500);
                 })
-                .catch(err => console.error(err));
+                .catch(err => {
+                    if (out) {
+                        out.innerText = "Fehler bei der Ausführung des Befehls.";
+                        out.style.color = 'var(--accent-red)';
+                        out.style.opacity = '1';
+                    }
+                    console.error("Fehler bei der Ausführung:", err);
+                });
             }
 
             fetchSysInfo();
