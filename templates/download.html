@@ -5,21 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Greenstone51 // Download</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-    <link rel="stylesheet" href="/static/style.css?v=17">
-    <style>
-        .btn-action, button:not(.hamburger), input[type="submit"], input[type="button"] {
-            box-shadow: 0 0 15px rgba(255, 0, 51, 0.45) !important;
-            transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease !important;
-        }
-        .btn-action:hover:not(:disabled), button:not(.hamburger):hover:not(:disabled), input[type="submit"]:hover:not(:disabled), input[type="button"]:hover:not(:disabled) {
-            box-shadow: 0 0 25px rgba(255, 0, 51, 0.8) !important;
-            transform: translateY(-1px) !important;
-        }
-        .btn-action:disabled, button:disabled {
-            box-shadow: none !important;
-            opacity: 0.5;
-        }
-    </style>
+    <link rel="stylesheet" href="/static/style.css?v=19">
     <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -122,13 +108,12 @@
     
     <footer>
         &copy; 2026 Greenstone51. All rights reserved. | 
-        <a href="/tos" style="color: var(--text-muted); text-decoration: underline;">ToS</a> | 
-        <a href="/datenschutz" style="color: var(--text-muted); text-decoration: underline;">Datenschutz</a> | 
-        <a href="/impressum" style="color: var(--text-muted); text-decoration: underline;">Impressum</a>
+        <a href="/tos" class="footer-link">ToS</a> | 
+        <a href="/datenschutz" class="footer-link">Datenschutz</a> | 
+        <a href="/impressum" class="footer-link">Impressum</a>
     </footer>
     
     <script>
-        // Präzise Mobile- & Touch-Erkennung
         const userAgent = navigator.userAgent || navigator.vendor || window.opera;
         const isMobileOS = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent) 
             || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
