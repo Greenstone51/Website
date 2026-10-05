@@ -10,6 +10,20 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <meta name="apple-mobile-web-app-title" content="Greenstone51">
+    <style>
+        .btn-action, button:not(.hamburger), input[type="submit"], input[type="button"] {
+            box-shadow: 0 0 15px rgba(255, 0, 51, 0.45) !important;
+            transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease !important;
+        }
+        .btn-action:hover:not(:disabled), button:not(.hamburger):hover:not(:disabled), input[type="submit"]:hover:not(:disabled), input[type="button"]:hover:not(:disabled) {
+            box-shadow: 0 0 25px rgba(255, 0, 51, 0.8) !important;
+            transform: translateY(-1px) !important;
+        }
+        .btn-action:disabled, button:disabled {
+            box-shadow: none !important;
+            opacity: 0.5;
+        }
+    </style>
     <script type="application/ld+json">
 {
   "@context": "https://schema.org",
