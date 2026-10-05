@@ -3,9 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Greenstone51 // Admin</title>
+    <title>Greenstone51 // Admin Center</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-    <link rel="stylesheet" href="/static/style.css?v=7">
+    <link rel="stylesheet" href="/static/style.css?v=18">
+    {% if login_mode and turnstile_sitekey %}
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    {% endif %}
 </head>
 <body>
 
@@ -32,125 +35,142 @@
         </nav>
     </header>
 
-    <main class="{% if login_mode %}main-centered{% endif %}">
+    <main>
         {% if login_mode %}
-            <div class="card login-card">
-                <h2 class="login-title">Admin Login Benötigt</h2>
-                {% if error %}
-                    <div class="alert alert-danger">{{ error }}</div>
+        <div class="page-header">
+            <h1 class="page-title">Admin Login</h1>
+            <p class="page-subtitle">Authentifizierung erforderlich, um auf die Server-Steuerung zuzugreifen.</p>
+        </div>
+
+        <div class="card card-full card-center" style="max-width: 500px; margin: 0 auto;">
+            <form method="POST" action="/vpn51/admin" style="display: flex; flex-direction: column; align-items: center; gap: 15px; width: 100%;">
+                <input type="password" name="password" placeholder="Admin-Passwort..." required class="password-input" style="width: 100%;">
+                
+                {% if turnstile_sitekey %}
+                <div class="cf-turnstile" data-sitekey="{{ turnstile_sitekey }}" data-theme="dark"></div>
                 {% endif %}
-                <form method="POST" action="/vpn51/admin">
-                    <div class="form-group">
-                        <label for="password" class="form-label">Server-Passwort</label>
-                        <input type="password" id="password" name="password" placeholder="••••••••" required autofocus class="form-input">
-                    </div>
-                    <button type="submit" class="btn-action w-100">Einloggen &rarr;</button>
-                </form>
-            </div>
+
+                <button type="submit" class="btn-unlock" style="width: 100%;">Anmelden</button>
+            </form>
+
+            {% if error %}
+            <p class="login-error" style="display: block; margin-top: 15px;">{{ error }}</p>
+            {% endif %}
+        </div>
+
         {% else %}
-            <div class="page-header">
-                <h1 class="page-title">Server Kontrollzentrum</h1>
-                <p class="page-subtitle">Administrativer Zugriff auf den Server.</p>
+
+        <div class="page-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+            <div>
+                <h1 class="page-title">Admin Control Center</h1>
+                <p class="page-subtitle">Verwaltung von Systemdiensten, VPN-Core und Server-Status.</p>
+            </div>
+            <a href="/vpn51/logout" class="btn-action btn-danger" style="text-decoration: none; display: inline-block;">Abmelden</a>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <h3 class="card-title">System Uptime</h3>
+                <div class="metric-value" id="sysUptime">Lade...</div>
+                <p class="metric-sub">Laufzeit des Ubuntu-Servers</p>
             </div>
 
-            <div class="grid">
-                <div class="card">
-                    <h3 class="card-title mb-1">Server-Details</h3>
-                    <div>
-                        <div class="info-row"><span class="info-label">Uptime:</span><span id="srvUptime">Lade...</span></div>
-                        <div class="info-row"><span class="info-label">Speicher Belegung (/):</span><span id="srvDisk">Lade...</span></div>
-                        <div class="info-row"><span class="info-label">Xray Core Service:</span><span id="srvXray">Lade...</span></div>
-                        <div class="info-row"><span class="info-label">Flask API Service:</span><span id="srvApi">Lade...</span></div>
-                    </div>
-                </div>
+            <div class="card">
+                <h3 class="card-title">Festplattenspeicher</h3>
+                <div class="metric-value" id="sysDisk">Lade...</div>
+                <p class="metric-sub">Belegung der Root-Partition (/)</p>
+            </div>
 
-                <div class="card">
-                    <h3 class="card-title mb-1">Dienste manuell steuern</h3>
-                    
-                    <div class="service-control service-control-border">
-                        <div class="service-title">Xray-Core Proxy Tunnel</div>
-                        <div class="button-row">
-                            <button onclick="triggerAction('start_xray')" class="btn-ctrl btn-ctrl-start">Start</button>
-                            <button onclick="triggerAction('stop_xray')" class="btn-ctrl btn-ctrl-stop">Stop</button>
-                            <button onclick="triggerAction('restart_xray')" class="btn-ctrl btn-ctrl-restart">Restart</button>
-                        </div>
-                    </div>
-
-                    <div class="service-control">
-                        <div class="service-title">Flask Web-API</div>
-                        <div class="button-row">
-                            <button onclick="triggerAction('start_api')" disabled title="Läuft bereits" class="btn-ctrl btn-ctrl-disabled">Start</button>
-                            <button onclick="triggerAction('stop_api', true)" class="btn-ctrl btn-ctrl-stop">Stop</button>
-                            <button onclick="triggerAction('restart_api')" class="btn-ctrl btn-ctrl-restart">Restart</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="card card-full-grid">
-                    <h3 class="card-title mb-1">DANGER-BEREICH</h3>
-                    <div class="power-buttons">
-                        <button class="btn-power" onclick="triggerAction('reboot_server', true)">Server rebooten</button>
-                        <button class="btn-power" onclick="triggerAction('shutdown_server', true)">Server herunterfahren</button>
-                    </div>
+            <div class="card">
+                <h3 class="card-title">Xray Systemdienst</h3>
+                <div class="metric-value" id="xrayState">Lade...</div>
+                <div class="btn-group mt-1">
+                    <button onclick="execCmd('start_xray')" class="btn-action">Starten</button>
+                    <button onclick="execCmd('restart_xray')" class="btn-action">Neustarten</button>
+                    <button onclick="execCmd('stop_xray')" class="btn-action btn-danger">Stoppen</button>
                 </div>
             </div>
 
-            <div class="logout-wrapper">
-                <a href="/vpn51/logout" class="btn-action btn-outline">Ausloggen</a>
+            <div class="card">
+                <h3 class="card-title">Flask Web-API</h3>
+                <div class="metric-value" id="apiState">Lade...</div>
+                <div class="btn-group mt-1">
+                    <button onclick="execCmd('restart_api')" class="btn-action">Neustarten</button>
+                    <button onclick="execCmd('stop_api')" class="btn-action btn-danger">Stoppen</button>
+                </div>
             </div>
+
+            <div class="card card-full-grid">
+                <h3 class="card-title">Server-Power-Management</h3>
+                <p class="metric-sub" style="margin-bottom: 15px;">Achtung: Das Herunterfahren schaltet den Server vollständig aus. Ein Neustart ist danach nur manuell oder über ein Wake-on-LAN-Paket möglich.</p>
+                <div class="btn-group">
+                    <button onclick="execCmd('reboot_server')" class="btn-action btn-danger">Server Rebooten</button>
+                    <button onclick="execCmd('shutdown_server')" class="btn-action btn-danger">Server Herunterfahren</button>
+                </div>
+                <div id="cmdOutput" class="copy-feedback" style="margin-top: 15px;"></div>
+            </div>
+        </div>
+
+        <script>
+            function fetchSysInfo() {
+                fetch('/vpn51/api/admin/sysinfo')
+                    .then(res => {
+                        if (!res.ok) throw new Error("Unauthorized");
+                        return res.json();
+                    })
+                    .then(data => {
+                        document.getElementById('sysUptime').innerText = data.uptime;
+                        document.getElementById('sysDisk').innerText = data.disk_usage;
+
+                        const xrayElem = document.getElementById('xrayState');
+                        xrayElem.innerText = data.xray_status.toUpperCase();
+                        xrayElem.style.color = data.xray_status === 'active' ? '#10b981' : 'var(--accent-red)';
+
+                        const apiElem = document.getElementById('apiState');
+                        apiElem.innerText = data.api_status.toUpperCase();
+                        apiElem.style.color = data.api_status === 'active' ? '#10b981' : 'var(--accent-red)';
+                    })
+                    .catch(err => console.error(err));
+            }
+
+            function execCmd(action) {
+                if ((action === 'reboot_server' || action === 'shutdown_server') && !confirm("Bist du sicher, dass du diese Aktion ausführen willst?")) {
+                    return;
+                }
+
+                fetch('/vpn51/api/admin/execute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: action })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    const out = document.getElementById('cmdOutput');
+                    out.innerText = data.msg;
+                    out.style.opacity = '1';
+                    setTimeout(() => { out.style.opacity = '0'; }, 4000);
+                    setTimeout(fetchSysInfo, 1500);
+                })
+                .catch(err => console.error(err));
+            }
+
+            fetchSysInfo();
+            setInterval(fetchSysInfo, 5000);
+        </script>
         {% endif %}
     </main>
 
     <footer>
-        &copy; 2026 Greenstone51. All rights reserved.
+        &copy; 2026 Greenstone51. All rights reserved. | 
+        <a href="/tos" style="color: var(--text-muted); text-decoration: underline;">ToS</a> | 
+        <a href="/datenschutz" style="color: var(--text-muted); text-decoration: underline;">Datenschutz</a> | 
+        <a href="/impressum" style="color: var(--text-muted); text-decoration: underline;">Impressum</a>
     </footer>
 
     <script>
         function toggleMenu() {
             document.getElementById('navMobile').classList.toggle('open');
         }
-
-        {% if not login_mode %}
-        function loadSysInfo() {
-            fetch('/vpn51/api/admin/sysinfo')
-                .then(res => res.json())
-                .then(data => {
-                    document.getElementById('srvUptime').innerText = data.uptime;
-                    document.getElementById('srvDisk').innerText = data.disk_usage;
-                    
-                    const xray = document.getElementById('srvXray');
-                    xray.innerText = data.xray_status === 'active' ? 'AKTIV' : data.xray_status.toUpperCase();
-                    xray.style.color = data.xray_status === 'active' ? '#10b981' : 'var(--accent-red)';
-
-                    const api = document.getElementById('srvApi');
-                    api.innerText = data.api_status === 'active' ? 'AKTIV' : data.api_status.toUpperCase();
-                    api.style.color = data.api_status === 'active' ? '#10b981' : 'var(--accent-red)';
-                })
-                .catch(err => console.error("Fehler bei Admin-Metriken:", err));
-        }
-
-        function triggerAction(actionName, requireConfirm = false) {
-            if (requireConfirm) {
-                const check = confirm("Bist du dir sicher? Das Stoppen des Dashboards oder das Manipulieren des Servers beendet deine aktive Session!");
-                if (!check) return;
-            }
-
-            fetch('/vpn51/api/admin/execute', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ action: actionName })
-            })
-            .then(res => res.json())
-            .then(data => {
-                alert(data.msg);
-                setTimeout(loadSysInfo, 1500);
-            })
-            .catch(err => alert("Befehl gesendet. Verbindung wird aktualisiert..."));
-        }
-
-        loadSysInfo();
-        setInterval(loadSysInfo, 4000);
-        {% endif %}
     </script>
 </body>
 </html>
