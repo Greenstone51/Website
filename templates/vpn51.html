@@ -6,6 +6,7 @@
     <title>Greenstone51 // VPN Dashboard</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="stylesheet" href="/static/style.css?v=18">
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -90,12 +91,17 @@
                 <h3 class="card-title">05 / Schnellverbindung</h3>
 
                 <div id="authSection" class="auth-container">
-                    <p class="auth-desc">Dieser Bereich ist geschützt. Gib das Passwort ein:</p>
-                    <div class="password-box">
-                        <input type="password" id="vpnPwdInput" placeholder="Passwort eingeben..." onkeydown="if(event.key === 'Enter') submitPassword()" class="password-input">
+                    <p class="auth-desc">Dieser Bereich ist geschützt. Gib das Passwort ein und verifiziere die Sicherheitsabfrage:</p>
+                    <div class="password-box" style="flex-direction: column; align-items: center; gap: 15px;">
+                        <input type="password" id="vpnPwdInput" placeholder="Passwort eingeben..." onkeydown="if(event.key === 'Enter') submitPassword()" class="password-input" style="width: 100%; max-width: 350px;">
+                        
+                        {% if turnstile_sitekey %}
+                        <div class="cf-turnstile" data-sitekey="{{ turnstile_sitekey }}" data-theme="dark"></div>
+                        {% endif %}
+
                         <button onclick="submitPassword()" class="btn-unlock">Freischalten</button>
                     </div>
-                    <p id="loginError" class="login-error">Falsches Passwort!</p>
+                    <p id="loginError" class="login-error">Falsches Passwort oder Roboter-Prüfung fehlgeschlagen!</p>
                 </div>
 
                 <div id="secretSection" onclick="copyConfigToClipboard()" class="secret-container">
@@ -113,7 +119,10 @@
     </main>
 
     <footer>
-        &copy; 2026 Greenstone51. All rights reserved.
+        &copy; 2026 Greenstone51. All rights reserved. | 
+        <a href="/tos" style="color: var(--text-muted); text-decoration: underline;">ToS</a> | 
+        <a href="/datenschutz" style="color: var(--text-muted); text-decoration: underline;">Datenschutz</a> | 
+        <a href="/impressum" style="color: var(--text-muted); text-decoration: underline;">Impressum</a>
     </footer>
 
     <script>
@@ -156,16 +165,25 @@
             const password = document.getElementById('vpnPwdInput').value;
             const errorText = document.getElementById('loginError');
 
+            let turnstileToken = "";
+            const turnstileInput = document.querySelector('[name="cf-turnstile-response"]');
+            if (turnstileInput) {
+                turnstileToken = turnstileInput.value;
+            }
+
             fetch('/vpn51/api/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ password: password })
+                body: JSON.stringify({ 
+                    password: password,
+                    turnstile_token: turnstileToken
+                })
             })
             .then(res => {
                 if (res.ok) {
                     return res.json();
                 } else {
-                    throw new Error('Unauthorized');
+                    return res.json().then(err => { throw new Error(err.error || 'Unauthorized'); });
                 }
             })
             .then(data => {
@@ -181,8 +199,11 @@
                 loadQRCode();
             })
             .catch(err => {
+                errorText.innerText = err.message || "Falsches Passwort oder Roboter-Prüfung fehlgeschlagen!";
                 errorText.style.display = 'block';
-                console.error("Login-Fehler:", err);
+                if (window.turnstile) {
+                    window.turnstile.reset();
+                }
             });
         }
 
