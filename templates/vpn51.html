@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Greenstone51 // VPN Dashboard</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-    <link rel="stylesheet" href="/static/style.css?v=18">
+    <link rel="stylesheet" href="/static/style.css?v=19">
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     <script type="application/ld+json">
 {
@@ -55,8 +55,8 @@
 
     <main>
         <div class="page-header">
-            <h1 class="page-title">VPN Dashboard</h1>
-            <p class="page-subtitle">Details über das VPN und deine Verbindung. Hier bekommst du auch das Passwort für deinen VPN-Client. Falls Sie ein Lehrer sind, halten Sie bitte Ihre Augen geschlossen und schließen Sie diese Seite, danke!</p>
+            <h1 class="page-title">VPN51 Service Dashboard</h1>
+            <p class="page-subtitle">Transparenter, leistungsstarker und zensurfreier VPN-Zugang. VPN51 nutzt moderne Stealth-Protokolle (VLESS REALITY), um Deine Privatsphäre zu schützen, Netzwerkeinschränkungen zuverlässig zu umgehen und maximale Verbindungsgeschwindigkeiten ohne Datenprotokollierung (Zero-Logs) zu garantieren.</p>
         </div>
 
         <div class="grid">
@@ -91,9 +91,9 @@
                 <h3 class="card-title">05 / Schnellverbindung</h3>
 
                 <div id="authSection" class="auth-container">
-                    <p class="auth-desc">Dieser Bereich ist geschützt. Gib das Passwort ein und verifiziere die Sicherheitsabfrage:</p>
+                    <p class="auth-desc">Authentifizierung erforderlich. Gib das Passwort ein und schließe die Sicherheitsabfrage ab, um Deine persönliche VLESS-Konfiguration abzurufen:</p>
                     <div class="password-box" style="flex-direction: column; align-items: center; gap: 15px; padding: 15px; border-radius: 8px;">
-                        <input type="password" id="vpnPwdInput" placeholder="Passwort eingeben..." onkeydown="if(event.key === 'Enter') submitPassword()" class="password-input" style="width: 100%; max-width: 350px;">
+                        <input type="password" id="vpnPwdInput" placeholder="VPN-Passwort..." onkeydown="if(event.key === 'Enter') submitPassword()" class="password-input" style="width: 100%; max-width: 350px;">
                         
                         {% if turnstile_sitekey %}
                         <div class="cf-turnstile" data-sitekey="{{ turnstile_sitekey }}" data-theme="dark"></div>
@@ -106,13 +106,13 @@
 
                 <div id="secretSection" onclick="copyConfigToClipboard()" class="secret-container">
                     <p class="secret-desc">
-                        Scanne den QR-Code ein oder klicke hier, um den Verbindungscode direkt zu kopieren.
+                        Scanne den QR-Code mit Deiner VPN-App oder klicke auf das Feld, um die VLESS-Konfigurationszeichenkette direkt in die Zwischenablage zu kopieren.
                     </p>
                     <p id="qrNoteText" class="qr-note-text"></p>
                     <div class="qr-wrapper">
                         <img id="qrCodeImg" src="" alt="Lade QR-Code..." class="qr-img">
                     </div>
-                    <div id="copyFeedback" class="copy-feedback">Code in Zwischenablage kopiert!</div>
+                    <div id="copyFeedback" class="copy-feedback">Konfiguration in Zwischenablage kopiert!</div>
                 </div>
             </div>
         </div>
