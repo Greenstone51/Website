@@ -4,8 +4,11 @@
     --border-color: #2a3547;
     --text-primary: #ffffff;
     --text-secondary: #94a3b8;
+    --text-muted: #64748b;
     --accent-red: #ff0033;
     --btn-hover: #d6002b;
+    --accent-green: #10b981;
+    --accent-orange: #f59e0b;
 }
 
 * {
@@ -103,6 +106,7 @@ main.main-centered {
 
 .page-header {
     margin-bottom: 2.5rem;
+    width: 100%;
 }
 
 .page-title {
@@ -199,7 +203,7 @@ main.main-centered {
     text-decoration: none;
     font-weight: 600;
     font-size: 0.9rem;
-    transition: background-color 0.2s ease;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
     border: none;
     cursor: pointer;
 }
@@ -212,6 +216,15 @@ main.main-centered {
     background-color: var(--border-color);
     color: var(--text-secondary);
     cursor: not-allowed;
+}
+
+.btn-danger {
+    background-color: var(--accent-red);
+    color: #ffffff;
+}
+
+.btn-danger:hover {
+    background-color: var(--btn-hover);
 }
 
 footer {
@@ -295,6 +308,33 @@ footer {
     color: #ffffff;
 }
 
+/* Status Colors & Badges */
+.status-active {
+    color: var(--accent-green) !important;
+}
+
+.status-inactive {
+    color: var(--accent-red) !important;
+}
+
+.badge-protected {
+    background-color: rgba(16, 185, 129, 0.2);
+    color: var(--accent-green);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: bold;
+}
+
+.badge-unprotected {
+    background-color: rgba(255, 0, 51, 0.2);
+    color: var(--accent-red);
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: bold;
+}
+
 /* Alerts */
 .alert {
     padding: 0.75rem 1rem;
@@ -304,9 +344,9 @@ footer {
 }
 
 .alert-success {
-    color: #10b981;
+    color: var(--accent-green);
     background-color: rgba(16, 185, 129, 0.1);
-    border: 1px solid #10b981;
+    border: 1px solid var(--accent-green);
 }
 
 .alert-danger {
@@ -547,8 +587,8 @@ footer {
     width: fit-content;
     max-width: 85vw;
     max-height: 70vh;
-    background-color: #1a2332;
-    border: 1px solid #ff0033;
+    background-color: var(--card-bg);
+    border: 1px solid var(--accent-red);
     border-radius: 8px;
     padding: 10px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
@@ -569,7 +609,7 @@ footer {
 .preview-popover pre {
     font-family: "Courier New", Courier, monospace;
     font-size: 0.8rem;
-    color: #94a3b8;
+    color: var(--text-secondary);
     white-space: pre-wrap;
     word-break: break-all;
     margin: 0;
@@ -586,9 +626,9 @@ footer {
 
 .preview-info-title {
     font-weight: bold;
-    color: #ff0033;
+    color: var(--accent-red);
     margin-bottom: 0.4rem;
-    border-bottom: 1px solid #2d3748;
+    border-bottom: 1px solid var(--border-color);
     padding-bottom: 0.2rem;
 }
 
@@ -603,7 +643,6 @@ footer {
     display: none;
 }
 
-/* Vorschau-Button ohne Hintergruende, Ränder & Focus-Outlines */
 .btn-preview-mobile {
     display: none;
     background: none !important;
@@ -660,24 +699,6 @@ body.touch-device .btn-preview-mobile {
     margin-top: 0.8rem;
 }
 
-.badge-protected {
-    background-color: rgba(16, 185, 129, 0.2);
-    color: #10b981;
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-    font-size: 0.8rem;
-    font-weight: bold;
-}
-
-.badge-unprotected {
-    background-color: rgba(255, 0, 51, 0.2);
-    color: var(--accent-red);
-    padding: 0.25rem 0.5rem;
-    border-radius: 4px;
-    font-size: 0.8rem;
-    font-weight: bold;
-}
-
 .auth-container {
     display: flex;
     flex-direction: column;
@@ -720,6 +741,11 @@ body.touch-device .btn-preview-mobile {
     font-size: 0.9rem;
     font-weight: bold;
     cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.btn-unlock:hover {
+    background-color: var(--btn-hover);
 }
 
 .login-error {
@@ -767,7 +793,7 @@ body.touch-device .btn-preview-mobile {
 }
 
 .copy-feedback {
-    color: #10b981;
+    color: var(--accent-green);
     font-size: 0.95rem;
     font-weight: bold;
     margin-top: 0.5rem;
@@ -775,7 +801,7 @@ body.touch-device .btn-preview-mobile {
     transition: opacity 0.3s ease-in-out;
 }
 
-/* Admin Center */
+/* Admin Controls & Buttons */
 .login-card {
     max-width: 450px;
     width: 100%;
@@ -850,27 +876,28 @@ body.touch-device .btn-preview-mobile {
     font-weight: bold;
     font-size: 0.8rem;
     transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+    border: 1px solid transparent;
 }
 
 .btn-ctrl-start {
     background-color: rgba(16, 185, 129, 0.1);
-    border: 1px solid #10b981;
-    color: #10b981;
+    border: 1px solid var(--accent-green);
+    color: var(--accent-green);
 }
 
 .btn-ctrl-start:hover {
-    background-color: #10b981;
+    background-color: var(--accent-green);
     color: #ffffff;
 }
 
 .btn-ctrl-stop {
     background-color: rgba(245, 158, 11, 0.1);
-    border: 1px solid #f59e0b;
-    color: #f59e0b;
+    border: 1px solid var(--accent-orange);
+    color: var(--accent-orange);
 }
 
 .btn-ctrl-stop:hover {
-    background-color: #f59e0b;
+    background-color: var(--accent-orange);
     color: #ffffff;
 }
 
