@@ -196,7 +196,7 @@ main.main-centered {
 
 /* Button & Interactive Glow Effects */
 .btn-action, 
-button:not(.hamburger), 
+button:not(.hamburger):not(.btn-ctrl):not(.btn-power), 
 input[type="submit"], 
 input[type="button"] {
     display: inline-block;
@@ -209,21 +209,21 @@ input[type="button"] {
     font-size: 0.9rem;
     border: none;
     cursor: pointer;
-    box-shadow: 0 0 15px rgba(255, 0, 51, 0.45);
+    box-shadow: 0 0 15px rgba(255, 0, 55, 0.45);
     transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 .btn-action:hover:not(:disabled), 
-button:not(.hamburger):hover:not(:disabled), 
+button:not(.hamburger):not(.btn-ctrl):not(.btn-power):hover:not(:disabled), 
 input[type="submit"]:hover:not(:disabled), 
 input[type="button"]:hover:not(:disabled) {
     background-color: var(--btn-hover);
-    box-shadow: 0 0 25px rgba(255, 0, 51, 0.8);
+    box-shadow: 0 0 25px rgba(255, 0, 55, 0.8);
     transform: translateY(-1px);
 }
 
 .btn-action:disabled, 
-button:disabled, 
+button:not(.hamburger):not(.btn-ctrl):not(.btn-power):disabled, 
 input[type="submit"]:disabled, 
 input[type="button"]:disabled {
     background-color: var(--border-color);
@@ -241,7 +241,7 @@ input[type="button"]:disabled {
 
 .btn-danger:hover {
     background-color: var(--btn-hover);
-    box-shadow: 0 0 25px rgba(255, 0, 51, 0.8);
+    box-shadow: 0 0 25px rgba(255, 0, 55, 0.8);
     transform: translateY(-1px);
 }
 
@@ -330,7 +330,7 @@ footer {
 .btn-outline:hover {
     background-color: var(--accent-red);
     color: #ffffff;
-    box-shadow: 0 0 20px rgba(255, 0, 51, 0.6);
+    box-shadow: 0 0 20px rgba(255, 0, 55, 0.6);
     transform: translateY(-1px);
 }
 
@@ -387,7 +387,7 @@ footer {
 }
 
 .badge-unprotected {
-    background-color: rgba(255, 0, 51, 0.2);
+    background-color: rgba(255, 0, 55, 0.2);
     color: var(--accent-red);
     padding: 0.25rem 0.5rem;
     border-radius: 4px;
@@ -411,7 +411,7 @@ footer {
 
 .alert-danger {
     color: var(--accent-red);
-    background-color: rgba(255, 0, 51, 0.1);
+    background-color: rgba(255, 0, 55, 0.1);
     border: 1px solid var(--accent-red);
 }
 
@@ -444,7 +444,7 @@ footer {
 
 .drop-zone.drag-over {
     border-color: var(--accent-red);
-    background-color: rgba(255, 0, 51, 0.05);
+    background-color: rgba(255, 0, 55, 0.05);
 }
 
 .drop-zone-text {
@@ -808,7 +808,7 @@ body.touch-device .btn-preview-mobile {
 
 .password-input:focus {
     border-bottom-color: var(--accent-red);
-    box-shadow: 0 2px 8px rgba(255, 0, 51, 0.3);
+    box-shadow: 0 2px 8px rgba(255, 0, 55, 0.3);
 }
 
 .btn-unlock {
@@ -825,7 +825,7 @@ body.touch-device .btn-preview-mobile {
 
 .btn-unlock:hover {
     background-color: var(--btn-hover);
-    box-shadow: 0 0 20px rgba(255, 0, 51, 0.6);
+    box-shadow: 0 0 20px rgba(255, 0, 55, 0.6);
     transform: translateY(-1px);
 }
 
@@ -919,7 +919,7 @@ body.touch-device .btn-preview-mobile {
 
 .form-input:focus {
     border-bottom-color: var(--accent-red);
-    box-shadow: 0 4px 12px rgba(255, 0, 51, 0.25);
+    box-shadow: 0 4px 12px rgba(255, 0, 55, 0.25);
 }
 
 .info-row {
@@ -968,53 +968,53 @@ body.touch-device .btn-preview-mobile {
     border: 1px solid transparent;
 }
 
-.btn-ctrl-start {
+button.btn-ctrl-start {
     background-color: rgba(16, 185, 129, 0.1);
     border: 1px solid var(--accent-green);
     color: var(--accent-green);
 }
 
-.btn-ctrl-start:hover {
+button.btn-ctrl-start:hover {
     background-color: var(--accent-green);
     color: #ffffff;
     box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
     transform: translateY(-1px);
 }
 
-.btn-ctrl-stop {
+button.btn-ctrl-stop {
     background-color: rgba(245, 158, 11, 0.1);
     border: 1px solid var(--accent-orange);
     color: var(--accent-orange);
 }
 
-.btn-ctrl-stop:hover {
+button.btn-ctrl-stop:hover {
     background-color: var(--accent-orange);
     color: #ffffff;
     box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
     transform: translateY(-1px);
 }
 
-.btn-ctrl-restart {
+button.btn-ctrl-restart {
     background-color: rgba(148, 163, 184, 0.1);
     border: 1px solid var(--text-secondary);
     color: var(--text-primary);
 }
 
-.btn-ctrl-restart:hover {
+button.btn-ctrl-restart:hover {
     background-color: var(--text-secondary);
     color: #ffffff;
     box-shadow: 0 4px 12px rgba(148, 163, 184, 0.4);
     transform: translateY(-1px);
 }
 
-.btn-ctrl-disabled {
+button.btn-ctrl-disabled {
     background-color: var(--border-color);
     color: var(--text-secondary);
     border: 1px solid var(--border-color);
     cursor: not-allowed;
 }
 
-.btn-ctrl-disabled:hover {
+button.btn-ctrl-disabled:hover {
     background-color: var(--border-color);
     color: var(--text-secondary);
     box-shadow: none;
@@ -1027,10 +1027,10 @@ body.touch-device .btn-preview-mobile {
     flex-wrap: wrap;
 }
 
-.btn-power {
+button.btn-power {
     flex: 1;
     min-width: 200px;
-    background-color: rgba(255, 0, 51, 0.05);
+    background-color: rgba(255, 0, 55, 0.05);
     border: 1px solid var(--accent-red);
     color: var(--accent-red);
     padding: 0.6rem;
@@ -1042,10 +1042,10 @@ body.touch-device .btn-preview-mobile {
     transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
-.btn-power:hover {
+button.btn-power:hover {
     background-color: var(--accent-red);
     color: #ffffff;
-    box-shadow: 0 4px 15px rgba(255, 0, 51, 0.4);
+    box-shadow: 0 4px 15px rgba(255, 0, 55, 0.4);
     transform: translateY(-1px);
 }
 
