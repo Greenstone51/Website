@@ -5,7 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Greenstone51 // Admin</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-    <link rel="stylesheet" href="/static/style.css?v=7">
+    <link rel="stylesheet" href="/static/style.css?v=8">
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 <body>
 
@@ -44,6 +45,11 @@
                         <label for="password" class="form-label">Server-Passwort</label>
                         <input type="password" id="password" name="password" placeholder="••••••••" required autofocus class="form-input">
                     </div>
+
+                    {% if turnstile_sitekey %}
+                    <div class="cf-turnstile mb-1" data-sitekey="{{ turnstile_sitekey }}" data-theme="dark"></div>
+                    {% endif %}
+
                     <button type="submit" class="btn-action w-100">Einloggen &rarr;</button>
                 </form>
             </div>
