@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Greenstone51 // Admin</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-    <link rel="stylesheet" href="/static/style.css?v=8">
+    <link rel="stylesheet" href="/static/style.css?v=19">
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 <body>
@@ -47,7 +47,7 @@
                     </div>
 
                     {% if turnstile_sitekey %}
-                    <div style="display: flex; justify-content: center; align-items: center; width: 100%; margin: 1.25rem 0;">
+                    <div class="turnstile-box">
                         <div class="cf-turnstile mb-1" data-sitekey="{{ turnstile_sitekey }}" data-theme="dark"></div>
                     </div>
                     {% endif %}
@@ -110,7 +110,10 @@
     </main>
 
     <footer>
-        &copy; 2026 Greenstone51. All rights reserved.
+        &copy; 2026 Greenstone51. All rights reserved. | 
+        <a href="/tos" class="footer-link">ToS</a> | 
+        <a href="/datenschutz" class="footer-link">Datenschutz</a> | 
+        <a href="/impressum" class="footer-link">Impressum</a>
     </footer>
 
     <script>
