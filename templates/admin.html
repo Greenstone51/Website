@@ -6,9 +6,7 @@
     <title>Greenstone51 // Admin Center</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="stylesheet" href="/static/style.css?v=18">
-    {% if login_mode and turnstile_sitekey %}
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-    {% endif %}
 </head>
 <body>
 
@@ -46,9 +44,7 @@
             <form method="POST" action="/vpn51/admin" style="display: flex; flex-direction: column; align-items: center; gap: 15px; width: 100%;">
                 <input type="password" name="password" placeholder="Admin-Passwort..." required class="password-input" style="width: 100%;">
                 
-                {% if turnstile_sitekey %}
                 <div class="cf-turnstile" data-sitekey="{{ turnstile_sitekey }}" data-theme="dark"></div>
-                {% endif %}
 
                 <button type="submit" class="btn-unlock" style="width: 100%;">Anmelden</button>
             </form>
@@ -102,7 +98,7 @@
 
             <div class="card card-full-grid">
                 <h3 class="card-title">Server-Power-Management</h3>
-                <p class="metric-sub" style="margin-bottom: 15px;">Achtung: Das Herunterfahren schaltet den Server vollständig aus. Ein Neustart ist danach nur manuell oder über ein Wake-on-LAN-Paket möglich.</p>
+                <p class="metric-sub" style="margin-bottom: 15px;">Achtung: Das Herunterfahren schaltet den Server vollständig aus.</p>
                 <div class="btn-group">
                     <button onclick="execCmd('reboot_server')" class="btn-action btn-danger">Server Rebooten</button>
                     <button onclick="execCmd('shutdown_server')" class="btn-action btn-danger">Server Herunterfahren</button>
