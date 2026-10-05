@@ -47,7 +47,9 @@
                     </div>
 
                     {% if turnstile_sitekey %}
-                    <div class="cf-turnstile mb-1" data-sitekey="{{ turnstile_sitekey }}" data-theme="dark"></div>
+                    <div style="display: flex; justify-content: center; align-items: center; width: 100%; margin: 1.25rem 0;">
+                        <div class="cf-turnstile mb-1" data-sitekey="{{ turnstile_sitekey }}" data-theme="dark"></div>
+                    </div>
                     {% endif %}
 
                     <button type="submit" class="btn-action w-100">Einloggen &rarr;</button>
