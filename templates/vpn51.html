@@ -92,14 +92,14 @@
 
                 <div id="authSection" class="auth-container">
                     <p class="auth-desc">Dieser Bereich ist geschützt. Gib das Passwort ein und verifiziere die Sicherheitsabfrage:</p>
-                    <div class="password-box" style="flex-direction: column; align-items: center; gap: 15px;">
+                    <div class="password-box" style="flex-direction: column; align-items: center; gap: 15px; padding: 15px; border-radius: 8px;">
                         <input type="password" id="vpnPwdInput" placeholder="Passwort eingeben..." onkeydown="if(event.key === 'Enter') submitPassword()" class="password-input" style="width: 100%; max-width: 350px;">
                         
                         {% if turnstile_sitekey %}
                         <div class="cf-turnstile" data-sitekey="{{ turnstile_sitekey }}" data-theme="dark"></div>
                         {% endif %}
 
-                        <button onclick="submitPassword()" class="btn-unlock">Freischalten</button>
+                        <button onclick="submitPassword()" class="btn-unlock" style="width: 100%; max-width: 350px; padding: 0.75rem 1.25rem; border-radius: 6px;">Freischalten</button>
                     </div>
                     <p id="loginError" class="login-error">Falsches Passwort oder Roboter-Prüfung fehlgeschlagen!</p>
                 </div>
@@ -137,28 +137,33 @@
                 .then(res => res.json())
                 .then(data => {
                     const statusText = document.getElementById('statusText');
-                    if(data.protected) {
+                    if (data.protected) {
                         statusText.innerHTML = '<span class="badge-protected">GESCHÜTZT</span>';
                     } else {
                         statusText.innerHTML = '<span class="badge-unprotected">UNGESCHÜTZT</span>';
                     }
-                    document.getElementById('ipText').innerText = `Deine IP: ${data.client_ip} (${data.ip_type})`;
+                    document.getElementById('ipText').innerText = `Deine IP: ${data.client_ip || '--'} (${data.ip_type || 'unbekannt'})`;
 
                     const vpnStatus = document.getElementById('vpnStatus');
                     vpnStatus.innerText = data.vpn_online ? "ONLINE" : "OFFLINE";
                     vpnStatus.style.color = data.vpn_online ? "#10b981" : "var(--accent-red)";
 
-                    const streamCount = data.active_users;
+                    const streamCount = data.active_users || 0;
                     if (streamCount === 1) {
                         document.getElementById('activeUsers').innerText = "1 Stream";
                     } else {
                         document.getElementById('activeUsers').innerText = streamCount + " Streams";
                     }
 
-                    document.getElementById('cpuVal').innerText = data.cpu + "%";
-                    document.getElementById('ramVal').innerText = data.ram + "%";
+                    document.getElementById('cpuVal').innerText = (data.cpu !== undefined ? data.cpu : 0) + "%";
+                    document.getElementById('ramVal').innerText = (data.ram !== undefined ? data.ram : 0) + "%";
                 })
-                .catch(err => console.error("Fehler beim Laden der API:", err));
+                .catch(err => {
+                    console.error("Fehler beim Laden der API:", err);
+                    document.getElementById('statusText').innerText = "Verbindungsfehler";
+                    document.getElementById('vpnStatus').innerText = "UNBEKANNT";
+                    document.getElementById('vpnStatus').style.color = "var(--text-secondary)";
+                });
         }
 
         function submitPassword() {
@@ -214,25 +219,49 @@
                     return res.text();
                 })
                 .then(base64Data => {
-                    if(base64Data) {
+                    if (base64Data) {
                         document.getElementById('qrCodeImg').src = "data:image/png;base64," + base64Data;
                     }
-                });
+                })
+                .catch(err => console.error("Fehler beim Laden des QR-Codes:", err));
         }
 
         function copyConfigToClipboard() {
-            if(!vlessConfigString) return;
+            if (!vlessConfigString) return;
 
-            navigator.clipboard.writeText(vlessConfigString).then(() => {
-                const feedback = document.getElementById('copyFeedback');
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(vlessConfigString).then(showCopyFeedback).catch(fallbackCopy);
+            } else {
+                fallbackCopy();
+            }
+        }
+
+        function fallbackCopy() {
+            const textArea = document.createElement("textarea");
+            textArea.value = vlessConfigString;
+            textArea.style.position = "fixed";
+            textArea.style.left = "-999999px";
+            textArea.style.top = "-999999px";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                showCopyFeedback();
+            } catch (err) {
+                console.error('Fehler beim Kopieren des Codes:', err);
+            }
+            document.body.removeChild(textArea);
+        }
+
+        function showCopyFeedback() {
+            const feedback = document.getElementById('copyFeedback');
+            if (feedback) {
                 feedback.style.opacity = '1';
-
                 setTimeout(() => {
                     feedback.style.opacity = '0';
                 }, 2500);
-            }).catch(err => {
-                console.error('Fehler beim Kopieren des Codes: ', err);
-            });
+            }
         }
 
         updateStats();
