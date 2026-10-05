@@ -203,19 +203,23 @@ main.main-centered {
     text-decoration: none;
     font-weight: 600;
     font-size: 0.9rem;
-    transition: background-color 0.2s ease, border-color 0.2s ease;
+    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
     border: none;
     cursor: pointer;
 }
 
 .btn-action:hover {
     background-color: var(--btn-hover);
+    box-shadow: 0 4px 15px rgba(255, 0, 51, 0.4);
+    transform: translateY(-1px);
 }
 
 .btn-action:disabled {
     background-color: var(--border-color);
     color: var(--text-secondary);
     cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
 }
 
 .btn-danger {
@@ -225,6 +229,8 @@ main.main-centered {
 
 .btn-danger:hover {
     background-color: var(--btn-hover);
+    box-shadow: 0 4px 15px rgba(255, 0, 51, 0.4);
+    transform: translateY(-1px);
 }
 
 footer {
@@ -300,12 +306,14 @@ footer {
     color: var(--accent-red);
     display: inline-block;
     padding: 0.6rem 2rem;
-    transition: background-color 0.2s ease, color 0.2s ease;
+    transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 .btn-outline:hover {
     background-color: var(--accent-red);
     color: #ffffff;
+    box-shadow: 0 4px 15px rgba(255, 0, 51, 0.4);
+    transform: translateY(-1px);
 }
 
 /* Status Colors & Badges */
@@ -727,10 +735,17 @@ body.touch-device .btn-preview-mobile {
     flex: 1;
     background: transparent;
     border: none;
+    border-bottom: 2px solid var(--accent-red);
     color: var(--text-primary);
     padding: 0.75rem 1rem;
     font-size: 0.95rem;
     outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.password-input:focus {
+    border-bottom-color: var(--accent-red);
+    box-shadow: 0 2px 8px rgba(255, 0, 51, 0.3);
 }
 
 .btn-unlock {
@@ -741,11 +756,13 @@ body.touch-device .btn-preview-mobile {
     font-size: 0.9rem;
     font-weight: bold;
     cursor: pointer;
-    transition: background-color 0.2s ease;
+    transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 .btn-unlock:hover {
     background-color: var(--btn-hover);
+    box-shadow: 0 4px 15px rgba(255, 0, 51, 0.4);
+    transform: translateY(-1px);
 }
 
 .login-error {
@@ -828,10 +845,17 @@ body.touch-device .btn-preview-mobile {
     padding: 0.75rem;
     background-color: var(--bg-color);
     border: 1px solid var(--border-color);
+    border-bottom: 2px solid var(--accent-red);
     border-radius: 6px;
     color: var(--text-primary);
     font-size: 1rem;
     outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-input:focus {
+    border-bottom-color: var(--accent-red);
+    box-shadow: 0 4px 12px rgba(255, 0, 51, 0.25);
 }
 
 .info-row {
@@ -875,7 +899,7 @@ body.touch-device .btn-preview-mobile {
     cursor: pointer;
     font-weight: bold;
     font-size: 0.8rem;
-    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+    transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
     border: 1px solid transparent;
 }
 
@@ -888,6 +912,8 @@ body.touch-device .btn-preview-mobile {
 .btn-ctrl-start:hover {
     background-color: var(--accent-green);
     color: #ffffff;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+    transform: translateY(-1px);
 }
 
 .btn-ctrl-stop {
@@ -899,6 +925,8 @@ body.touch-device .btn-preview-mobile {
 .btn-ctrl-stop:hover {
     background-color: var(--accent-orange);
     color: #ffffff;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+    transform: translateY(-1px);
 }
 
 .btn-ctrl-restart {
@@ -910,6 +938,8 @@ body.touch-device .btn-preview-mobile {
 .btn-ctrl-restart:hover {
     background-color: var(--text-secondary);
     color: #ffffff;
+    box-shadow: 0 4px 12px rgba(148, 163, 184, 0.4);
+    transform: translateY(-1px);
 }
 
 .btn-ctrl-disabled {
@@ -922,6 +952,8 @@ body.touch-device .btn-preview-mobile {
 .btn-ctrl-disabled:hover {
     background-color: var(--border-color);
     color: var(--text-secondary);
+    box-shadow: none;
+    transform: none;
 }
 
 .power-buttons {
@@ -941,12 +973,14 @@ body.touch-device .btn-preview-mobile {
     font-weight: bold;
     border-radius: 6px;
     cursor: pointer;
-    transition: background-color 0.2s ease, color 0.2s ease;
+    transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 .btn-power:hover {
     background-color: var(--accent-red);
     color: #ffffff;
+    box-shadow: 0 4px 15px rgba(255, 0, 51, 0.4);
+    transform: translateY(-1px);
 }
 
 .logout-wrapper {
