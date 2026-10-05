@@ -31,6 +31,10 @@ VPN_SERVICE_NAME = "xray"
 API_SERVICE_NAME = "website-backend.service"
 XRAY_INTERNAL_PORT = 443
 
+# Cloudflare Turnstile Konfiguration
+TURNSTILE_SITEKEY = os.getenv("TURNSTILE_SITEKEY", "")
+TURNSTILE_SECRET_KEY = os.getenv("TURNSTILE_SECRET_KEY", "")
+
 # Konfigurationen aus den Umgebungsvariablen abrufen
 VLESS_LINK = os.getenv("VLESS_LINK", "https://greenstone51.de/404")
 QR_CODE_NOTE = os.getenv("QR_CODE_NOTE", "Environment Variablen konnten nicht geladen werden. Kontaktiere den Systemadministrator via Email unter admin@greenstone51.de.")
@@ -61,10 +65,30 @@ try:
     SERVER_IP6 = requests.get("https://api64.ipify.org?format=json", timeout=3).json()["ip"]
 except: pass
 
+# ================= TURNSTILE PRÜFUNG =================
+def verify_turnstile(token, remote_ip):
+    if not TURNSTILE_SECRET_KEY:
+        return True
+    try:
+        res = requests.post(
+            "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+            data={
+                "secret": TURNSTILE_SECRET_KEY,
+                "response": token,
+                "remoteip": remote_ip
+            },
+            timeout=5
+        )
+        outcome = res.json()
+        return outcome.get("success", False)
+    except Exception as e:
+        print(f"[Turnstile Fehler] {e}", flush=True)
+        return False
+
 # ================= RATE LIMITING & CLEANUP =================
 upload_attempts = defaultdict(list)
-RATE_LIMIT_WINDOW = 60  # Zeitfenster in Sekunden
-RATE_LIMIT_MAX_REQUESTS = 10  # Max. Uploads pro Zeitfenster
+RATE_LIMIT_WINDOW = 60
+RATE_LIMIT_MAX_REQUESTS = 10
 
 def get_upload_client_id():
     if 'upload_client_id' not in session:
@@ -97,8 +121,6 @@ def cleanup_uploads_folder():
                     os.remove(fpath)
                 except OSError:
                     pass
-
-# ================= AUTOMATISCHE 14-TAGE LÖSCHUNG =================
 
 def is_file_protected(filename, filepath):
     if filename.startswith('.'):
@@ -173,7 +195,6 @@ def start_scheduled_cleanup():
 start_scheduled_cleanup()
 
 # ================= WEB PUSH HELFER =================
-
 def load_push_subscriptions():
     if os.path.exists(PUSH_SUBSCRIPTIONS_FILE):
         try:
@@ -198,7 +219,6 @@ def send_web_push_notifications(title, message, target_url="/download"):
         return
 
     subscriptions = load_push_subscriptions()
-    print(f"[Push] Geladene Abonnements: {len(subscriptions)}", flush=True)
     if not subscriptions:
         return
 
@@ -207,7 +227,6 @@ def send_web_push_notifications(title, message, target_url="/download"):
         priv_key = os.path.join(BASE_DIR, priv_key)
 
     if not os.path.exists(priv_key):
-        print(f"[Push Fehler] Private Key nicht gefunden unter: {priv_key}", flush=True)
         return
 
     payload = json.dumps({
@@ -228,16 +247,13 @@ def send_web_push_notifications(title, message, target_url="/download"):
                 vapid_claims={"sub": VAPID_CLAIM_EMAIL}
             )
             remaining_subscriptions.append(sub)
-            print(f"[Push Erfolg] Status {res.status_code} fuer Endpunkt: {sub.get('endpoint', '')[:40]}...", flush=True)
         except WebPushException as ex:
-            print(f"[Push WebPushException] {ex}", flush=True)
             if ex.response is not None and ex.response.status_code in (404, 410):
                 has_changes = True
             else:
                 remaining_subscriptions.append(sub)
         except Exception as ex:
             remaining_subscriptions.append(sub)
-            print(f"[Push Allgemeiner Fehler] {ex}", flush=True)
 
     if has_changes:
         save_push_subscriptions(remaining_subscriptions)
@@ -261,7 +277,19 @@ def static_from_root():
 
 @app.route('/vpn51')
 def vpn51_page():
-    return render_template('vpn51.html')
+    return render_template('vpn51.html', turnstile_sitekey=TURNSTILE_SITEKEY)
+
+@app.route('/impressum')
+def impressum_page():
+    return render_template('impressum.html')
+
+@app.route('/datenschutz')
+def datenschutz_page():
+    return render_template('datenschutz.html')
+
+@app.route('/tos')
+def tos_page():
+    return render_template('tos.html')
 
 @app.route('/upload', methods=['GET', 'POST'])
 def upload_page():
@@ -278,7 +306,6 @@ def upload_page():
         files = [f for f in raw_files if f and f.filename != '']
 
         if not files:
-            print("[Upload Warning] POST empfangen, aber keine Dateien im Formular gefunden.", flush=True)
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
                 return jsonify({'success': False, 'message': 'Keine Dateien empfangen.'}), 400
             return render_template('upload.html', message="Keine Datei ausgewählt.", success=False)
@@ -330,8 +357,6 @@ def upload_page():
                 push_body = f"Datei '{uploaded_names[0]}' wurde hochgeladen."
             else:
                 push_body = f"{count} neue Dateien wurden hochgeladen."
-            
-            print(f"[Upload] {count} Datei(en) gespeichert. Starte Push-Benachrichtigung...", flush=True)
             send_web_push_notifications(push_title, push_body, "/download")
 
         msg = f"{count} Datei(en) erfolgreich hochgeladen."
@@ -350,15 +375,21 @@ def download_page():
 def admin_page():
     if request.method == 'POST':
         password = request.form.get('password', '')
+        turnstile_token = request.form.get('cf-turnstile-response', '')
+        client_ip = request.headers.get('CF-Connecting-IP', request.remote_addr)
+
+        if TURNSTILE_SECRET_KEY and not verify_turnstile(turnstile_token, client_ip):
+            return render_template('admin.html', login_mode=True, turnstile_sitekey=TURNSTILE_SITEKEY, error="Sicherheitsüberprüfung fehlgeschlagen (Ich bin kein Roboter).")
+
         valid = check_password_hash(ADMIN_PASSWORD_HASH, password) if ADMIN_PASSWORD_HASH else False
 
         if valid:
             session['logged_in'] = True
             return redirect(url_for('admin_page'))
-        return render_template('admin.html', login_mode=True, error="Zutritt verweigert! Falsches Passwort.")
+        return render_template('admin.html', login_mode=True, turnstile_sitekey=TURNSTILE_SITEKEY, error="Zutritt verweigert! Falsches Passwort.")
 
     if not session.get('logged_in'):
-        return render_template('admin.html', login_mode=True)
+        return render_template('admin.html', login_mode=True, turnstile_sitekey=TURNSTILE_SITEKEY)
     return render_template('admin.html', login_mode=False)
 
 @app.route('/vpn51/logout')
@@ -383,7 +414,6 @@ def push_subscribe():
     if not any(s.get('endpoint') == sub_data.get('endpoint') for s in subscriptions):
         subscriptions.append(sub_data)
         save_push_subscriptions(subscriptions)
-        print(f"[Push Subscribed] Neuer Endpunkt registriert: {sub_data.get('endpoint')[:40]}...", flush=True)
 
     return jsonify({'success': True})
 
@@ -396,7 +426,6 @@ def push_unsubscribe():
     subscriptions = load_push_subscriptions()
     new_subs = [s for s in subscriptions if s.get('endpoint') != sub_data.get('endpoint')]
     save_push_subscriptions(new_subs)
-    print(f"[Push Unsubscribed] Endpunkt entfernt: {sub_data.get('endpoint')[:40]}...", flush=True)
 
     return jsonify({'success': True})
 
@@ -511,11 +540,16 @@ def api_stats():
 
 @app.route('/vpn51/api/login', methods=['POST'])
 def api_quick_login():
-    data = request.get_json()
-    if not data or 'password' not in data:
-        return jsonify({"error": "Passwort fehlt"}), 400
-    
-    password = data.get('password')
+    data = request.get_json() or {}
+    password = data.get('password', '')
+    turnstile_token = data.get('turnstile_token', '')
+
+    client_ip = request.headers.get('CF-Connecting-IP', request.remote_addr)
+
+    if TURNSTILE_SECRET_KEY:
+        if not turnstile_token or not verify_turnstile(turnstile_token, client_ip):
+            return jsonify({"error": "Sicherheitsüberprüfung fehlgeschlagen (Ich bin kein Roboter)."}), 400
+
     if QUICK_CONNECT_PASSWORD_HASH and check_password_hash(QUICK_CONNECT_PASSWORD_HASH, password):
         session['qr_access'] = True
         return jsonify({
@@ -524,7 +558,7 @@ def api_quick_login():
             "note": QR_CODE_NOTE
         }), 200
     
-    return jsonify({"error": "Falsches Passwort"}), 401
+    return jsonify({"error": "Falsches Passwort!"}), 401
 
 @app.route('/vpn51/api/qrcode')
 def api_qrcode():
