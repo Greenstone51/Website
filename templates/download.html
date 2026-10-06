@@ -6,6 +6,14 @@
     <title>Greenstone51 // Download</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="stylesheet" href="/static/style.css?v=19">
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    <style>
+        .turnstile-wrapper {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 15px;
+        }
+    </style>
     <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -65,6 +73,10 @@
         </div>
 
         <div class="card card-full">
+            <div class="turnstile-wrapper">
+                <div class="cf-turnstile" data-sitekey="0x4AAAAAAFOmie9SiqjuUPxF" data-callback="onTurnstileSuccess" data-expired-callback="onTurnstileExpired"></div>
+            </div>
+
             <div class="toolbar-download">
                 <input type="text" id="searchInput" placeholder="Dateien filtern..." oninput="filterFiles()" class="input-search">
                 <button id="downloadBtn" class="btn-action" onclick="downloadSelected()" disabled>Ausgewählte herunterladen (0)</button>
@@ -114,6 +126,26 @@
     </footer>
     
     <script>
+        let turnstileToken = '';
+
+        function onTurnstileSuccess(token) {
+            turnstileToken = token;
+            updateDownloadButton();
+        }
+
+        function onTurnstileExpired() {
+            turnstileToken = '';
+            updateDownloadButton();
+        }
+
+        function verifyTurnstileBeforeAction() {
+            if (!turnstileToken) {
+                alert('Bitte löse zuerst die Turnstile-Sicherheitsabfrage.');
+                return false;
+            }
+            return true;
+        }
+
         const userAgent = navigator.userAgent || navigator.vendor || window.opera;
         const isMobileOS = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent) 
             || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -196,6 +228,8 @@
 
         async function openInBrowser(e, encodedFilename) {
             e.preventDefault();
+            if (!verifyTurnstileBeforeAction()) return;
+
             const filename = decodeURIComponent(encodedFilename);
             const newTab = window.open('about:blank', '_blank');
             if (newTab) {
@@ -203,7 +237,11 @@
             }
 
             try {
-                const response = await fetch('/download/file/' + encodeURIComponent(filename));
+                const response = await fetch('/download/file/' + encodeURIComponent(filename), {
+                    headers: {
+                        'X-Turnstile-Token': turnstileToken
+                    }
+                });
                 if (!response.ok) throw new Error('Fehler beim Abrufen der Datei.');
 
                 const rawBlob = await response.blob();
@@ -237,8 +275,14 @@
         }
 
         async function downloadSingleFile(filename) {
+            if (!verifyTurnstileBeforeAction()) return;
+
             try {
-                const response = await fetch('/download/file/' + encodeURIComponent(filename));
+                const response = await fetch('/download/file/' + encodeURIComponent(filename), {
+                    headers: {
+                        'X-Turnstile-Token': turnstileToken
+                    }
+                });
                 if (!response.ok) throw new Error('Download fehlgeschlagen');
                 const blob = await response.blob();
                 triggerBlobDownload(blob, filename);
@@ -460,7 +504,7 @@
             const btn = document.getElementById('downloadBtn');
             const count = selectedFiles.size;
             btn.textContent = `Ausgewählte herunterladen (${count})`;
-            btn.disabled = count === 0;
+            btn.disabled = count === 0 || !turnstileToken;
 
             const selectAll = document.getElementById('selectAll');
             if (currentFiles.length > 0 && selectedFiles.size === currentFiles.length) {
@@ -476,6 +520,8 @@
         }
 
         async function downloadSelected() {
+            if (!verifyTurnstileBeforeAction()) return;
+
             const filesArray = Array.from(selectedFiles);
             if (filesArray.length === 0) return;
 
@@ -485,8 +531,14 @@
                 try {
                     const response = await fetch('/download/zip', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ files: filesArray })
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'X-Turnstile-Token': turnstileToken
+                        },
+                        body: JSON.stringify({ 
+                            files: filesArray,
+                            'cf-turnstile-response': turnstileToken
+                        })
                     });
                     
                     if (response.ok) {
