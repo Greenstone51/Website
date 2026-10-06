@@ -5,32 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Greenstone51 // Upload</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-    <link rel="stylesheet" href="/static/style.css?v=15">
+    <link rel="stylesheet" href="/static/style.css?v=20">
     <link rel="manifest" href="/static/manifest.json">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <meta name="apple-mobile-web-app-title" content="Greenstone51">
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-    <style>
-        .btn-action, button:not(.hamburger), input[type="submit"], input[type="button"] {
-            box-shadow: 0 0 15px rgba(255, 0, 51, 0.45) !important;
-            transition: background-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease !important;
-        }
-        .btn-action:hover:not(:disabled), button:not(.hamburger):hover:not(:disabled), input[type="submit"]:hover:not(:disabled), input[type="button"]:hover:not(:disabled) {
-            box-shadow: 0 0 25px rgba(255, 0, 51, 0.8) !important;
-            transform: translateY(-1px) !important;
-        }
-        .btn-action:disabled, button:disabled {
-            box-shadow: none !important;
-            opacity: 0.5;
-        }
-        .turnstile-wrapper {
-            display: flex;
-            justify-content: center;
-            margin-top: 15px;
-            margin-bottom: 15px;
-        }
-    </style>
     <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -359,7 +339,6 @@
             xhr.send(formData);
         });
 
-        // ================= BROWSER WEB PUSH REGISTRIERUNG =================
         function urlBase64ToUint8Array(base64String) {
             const padding = '='.repeat((4 - base64String.length % 4) % 4);
             const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
