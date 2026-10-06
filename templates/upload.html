@@ -10,6 +10,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <meta name="apple-mobile-web-app-title" content="Greenstone51">
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     <style>
         .btn-action, button:not(.hamburger), input[type="submit"], input[type="button"] {
             box-shadow: 0 0 15px rgba(255, 0, 51, 0.45) !important;
@@ -22,6 +23,12 @@
         .btn-action:disabled, button:disabled {
             box-shadow: none !important;
             opacity: 0.5;
+        }
+        .turnstile-wrapper {
+            display: flex;
+            justify-content: center;
+            margin-top: 15px;
+            margin-bottom: 15px;
         }
     </style>
     <script type="application/ld+json">
@@ -114,6 +121,10 @@
                     <input type="text" id="customName" name="custom_name" placeholder="z. B. PoWi Arbeitsblatt, Project X oder Plakat Y" style="width: 100%; padding: 10px 12px; border-radius: 6px; border: 1px solid #2a2a2a; background: #141414; color: #fff; font-size: 0.9rem; box-sizing: border-box; outline: none;">
                 </div>
 
+                <div class="turnstile-wrapper">
+                    <div class="cf-turnstile" data-sitekey="0x4AAAAAAFOmie9SiqjuUPxF" data-callback="onTurnstileSuccess" data-expired-callback="onTurnstileExpired"></div>
+                </div>
+
                 <div class="progress-bar-container" id="progressContainer">
                     <div class="progress-bar" id="progressBar"></div>
                 </div>
@@ -151,6 +162,21 @@
         const customNameInput = document.getElementById('customName');
 
         let selectedFiles = [];
+        let turnstileToken = '';
+
+        function onTurnstileSuccess(token) {
+            turnstileToken = token;
+            updateSubmitButtonState();
+        }
+
+        function onTurnstileExpired() {
+            turnstileToken = '';
+            updateSubmitButtonState();
+        }
+
+        function updateSubmitButtonState() {
+            submitBtn.disabled = selectedFiles.length === 0 || !turnstileToken;
+        }
 
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
             document.body.addEventListener(eventName, preventDefaults, false);
@@ -224,14 +250,14 @@
             if (selectedFiles.length === 0) {
                 dropZoneText.style.display = 'block';
                 fileListPreview.classList.add('hidden');
-                submitBtn.disabled = true;
                 fileInput.value = '';
+                updateSubmitButtonState();
                 return;
             }
 
             dropZoneText.style.display = 'none';
             fileListPreview.classList.remove('hidden');
-            submitBtn.disabled = false;
+            updateSubmitButtonState();
 
             let html = '';
             selectedFiles.forEach((file, index) => {
@@ -249,9 +275,20 @@
             fileListPreview.innerHTML = html;
         }
 
+        function resetTurnstileWidget() {
+            turnstileToken = '';
+            if (typeof turnstile !== 'undefined') {
+                turnstile.reset();
+            }
+            updateSubmitButtonState();
+        }
+
         document.getElementById('uploadForm').addEventListener('submit', function(e) {
             e.preventDefault();
-            if (selectedFiles.length === 0) return;
+            if (selectedFiles.length === 0 || !turnstileToken) {
+                alert('Bitte löse erst das Sicherheits-Captcha.');
+                return;
+            }
 
             const formData = new FormData();
             selectedFiles.forEach(file => {
@@ -262,6 +299,8 @@
             if (customNameValue) {
                 formData.append('custom_name', customNameValue);
             }
+
+            formData.append('cf-turnstile-response', turnstileToken);
 
             const xhr = new XMLHttpRequest();
             xhr.open('POST', '/upload', true);
@@ -292,7 +331,7 @@
                     statusMessage.classList.remove('hidden');
                     statusMessage.className = 'alert alert-danger';
                     statusMessage.textContent = res.message || 'Rate Limit erreicht! Zu viele Upload-Versuche.';
-                    submitBtn.disabled = false;
+                    resetTurnstileWidget();
                     return;
                 }
 
@@ -305,9 +344,8 @@
                     fileInput.value = '';
                     customNameInput.value = '';
                     updatePreview();
-                } else {
-                    submitBtn.disabled = false;
                 }
+                resetTurnstileWidget();
             };
 
             xhr.onerror = function() {
@@ -315,7 +353,7 @@
                 statusMessage.classList.remove('hidden');
                 statusMessage.className = 'alert alert-danger';
                 statusMessage.textContent = 'Netzwerkfehler beim Upload.';
-                submitBtn.disabled = false;
+                resetTurnstileWidget();
             };
 
             xhr.send(formData);
