@@ -47,7 +47,8 @@ VAPID_CLAIM_EMAIL = os.getenv("VAPID_CLAIM_EMAIL", "mailto:admin@greenstone51.de
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_FOLDER = os.path.abspath(os.path.join(BASE_DIR, 'uploads'))
 DOWNLOAD_FOLDER = UPLOAD_FOLDER
-CLEANUP_STATE_FILE = os.path.abspath(os.path.join(BASE_DIR, '.cleanup_state.json'))
+UPLOAD_RETENTION_DAYS = 14
+CLEANUP_CHECK_INTERVAL_SECONDS = 60 * 60  # Check once per hour
 PROTECTED_FILES_LIST = os.path.abspath(os.path.join(UPLOAD_FOLDER, '.protected_files.json'))
 PUSH_SUBSCRIPTIONS_FILE = os.path.abspath(os.path.join(BASE_DIR, 'push_subscriptions.json'))
 
@@ -130,66 +131,89 @@ def is_file_protected(filename, filepath):
         try:
             with open(PROTECTED_FILES_LIST, 'r', encoding='utf-8') as f:
                 protected_files = json.load(f)
-                if isinstance(protected_files, list) and filename in protected_files:
-                    return True
-        except Exception:
-            pass
+            if not isinstance(protected_files, list):
+                raise ValueError("Protected-files list must contain a JSON array")
+            return filename in protected_files
+        except Exception as e:
+            # Fail closed: a broken protection list must never cause protected
+            # uploads to be deleted.
+            print(
+                f"[Upload Cleanup] Cannot read protected-files list; "
+                f"preserving '{filename}': {e}",
+                flush=True
+            )
+            return True
 
     return False
 
-def biweekly_sunday_cleanup():
+def cleanup_expired_uploads():
+    """Delete unprotected uploaded files after the 14-day retention period."""
     folder = app.config['UPLOAD_FOLDER']
-    if not os.path.exists(folder):
+    if not os.path.isdir(folder):
         return
 
-    now = datetime.now()
-    if now.weekday() != 6:
-        return
+    cutoff_timestamp = time.time() - (UPLOAD_RETENTION_DAYS * 24 * 60 * 60)
+    deleted_count = 0
+    failed_count = 0
 
-    today_str = now.strftime('%Y-%m-%d')
-    last_cleanup_str = None
+    def log_walk_error(error):
+        print(f"[Upload Cleanup] Cannot scan directory: {error}", flush=True)
 
-    if os.path.exists(CLEANUP_STATE_FILE):
-        try:
-            with open(CLEANUP_STATE_FILE, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                last_cleanup_str = data.get('last_cleanup_date')
-        except Exception:
-            pass
+    # Walk recursively so old files cannot survive merely because they are in
+    # a subdirectory. Hidden directories are deliberately left untouched.
+    for root, dirnames, filenames in os.walk(
+        folder, topdown=True, onerror=log_walk_error, followlinks=False
+    ):
+        dirnames[:] = [dirname for dirname in dirnames if not dirname.startswith('.')]
 
-    if last_cleanup_str:
-        try:
-            last_cleanup_date = datetime.strptime(last_cleanup_str, '%Y-%m-%d')
-            if (now - last_cleanup_date).days < 12:
-                return
-        except ValueError:
-            pass
+        for filename in filenames:
+            filepath = os.path.join(root, filename)
 
-    for fname in os.listdir(folder):
-        fpath = os.path.join(folder, fname)
-        if os.path.isfile(fpath):
-            if not is_file_protected(fname, fpath):
-                try:
-                    os.remove(fpath)
-                except OSError:
-                    pass
+            if is_file_protected(filename, filepath):
+                continue
 
-    try:
-        with open(CLEANUP_STATE_FILE, 'w', encoding='utf-8') as f:
-            json.dump({'last_cleanup_date': today_str}, f)
-    except Exception:
-        pass
+            try:
+                # Do not follow or remove symlinks; only expire regular files.
+                if os.path.islink(filepath) or not os.path.isfile(filepath):
+                    continue
+
+                if os.path.getmtime(filepath) < cutoff_timestamp:
+                    os.remove(filepath)
+                    deleted_count += 1
+            except FileNotFoundError:
+                # Another worker may have removed the same expired file.
+                continue
+            except OSError as e:
+                failed_count += 1
+                print(
+                    f"[Upload Cleanup] Could not delete '{filepath}': {e}",
+                    flush=True
+                )
+
+    if deleted_count or failed_count:
+        print(
+            f"[Upload Cleanup] Deleted {deleted_count} expired file(s); "
+            f"{failed_count} deletion failure(s).",
+            flush=True
+        )
 
 def start_scheduled_cleanup():
     def loop():
         while True:
             try:
-                biweekly_sunday_cleanup()
-            except Exception:
-                pass
-            time.sleep(3600)
+                # Run immediately at startup, then re-check every hour. The
+                # per-file age check makes retries safe and idempotent.
+                cleanup_expired_uploads()
+            except Exception as e:
+                print(f"[Upload Cleanup] Unexpected error: {e}", flush=True)
 
-    thread = threading.Thread(target=loop, daemon=True)
+            time.sleep(CLEANUP_CHECK_INTERVAL_SECONDS)
+
+    thread = threading.Thread(
+        target=loop,
+        name="upload-expiration-cleanup",
+        daemon=True
+    )
     thread.start()
 
 start_scheduled_cleanup()
