@@ -49,7 +49,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_FOLDER = os.path.abspath(os.path.join(BASE_DIR, 'uploads'))
 DOWNLOAD_FOLDER = UPLOAD_FOLDER
 # Upload cleanup settings (read from .env / process environment).
-UPLOAD_CLEANUP_ENABLED = os.getenv("UPLOAD_CLEANUP_ENABLED", "true").strip().lower() in {
+UPLOAD_AGE_CLEANUP_ENABLED = os.getenv("UPLOAD_AGE_CLEANUP_ENABLED", "true").strip().lower() in {
     "1", "true", "yes", "on"
 }
 UPLOAD_RETENTION_DAYS = int(os.getenv("UPLOAD_RETENTION_DAYS", "14"))
@@ -258,7 +258,7 @@ def _write_cleanup_date(cleanup_date):
 
 def run_scheduled_cleanup(now=None):
     """Run at most once per local calendar day, including after missed runs."""
-    if not UPLOAD_CLEANUP_ENABLED:
+    if not UPLOAD_AGE_CLEANUP_ENABLED:
         return True
 
     now = now or datetime.now()
@@ -302,9 +302,9 @@ def run_scheduled_cleanup(now=None):
 
 
 def start_scheduled_cleanup():
-    if not UPLOAD_CLEANUP_ENABLED:
+    if not UPLOAD_AGE_CLEANUP_ENABLED:
         print(
-            "[Upload Cleanup] Disabled via UPLOAD_CLEANUP_ENABLED.",
+            "[Upload Cleanup] Disabled via UPLOAD_AGE_CLEANUP_ENABLED.",
             flush=True
         )
         return
