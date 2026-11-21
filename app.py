@@ -5,6 +5,7 @@ import uuid
 import base64
 import json
 import threading
+import fcntl
 import subprocess
 import requests
 import psutil
@@ -47,8 +48,26 @@ VAPID_CLAIM_EMAIL = os.getenv("VAPID_CLAIM_EMAIL", "mailto:admin@greenstone51.de
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_FOLDER = os.path.abspath(os.path.join(BASE_DIR, 'uploads'))
 DOWNLOAD_FOLDER = UPLOAD_FOLDER
-UPLOAD_RETENTION_DAYS = 14
-CLEANUP_CHECK_INTERVAL_SECONDS = 60 * 60  # Check once per hour
+# Upload cleanup settings (read from .env / process environment).
+UPLOAD_CLEANUP_ENABLED = os.getenv("UPLOAD_CLEANUP_ENABLED", "true").strip().lower() in {
+    "1", "true", "yes", "on"
+}
+UPLOAD_RETENTION_DAYS = int(os.getenv("UPLOAD_RETENTION_DAYS", "14"))
+if UPLOAD_RETENTION_DAYS < 1:
+    raise ValueError("UPLOAD_RETENTION_DAYS must be at least 1")
+
+UPLOAD_CLEANUP_TIME = os.getenv("UPLOAD_CLEANUP_TIME", "00:00").strip()
+try:
+    UPLOAD_CLEANUP_SCHEDULE_TIME = datetime.strptime(
+        UPLOAD_CLEANUP_TIME, "%H:%M"
+    ).time()
+except ValueError as e:
+    raise ValueError(
+        "UPLOAD_CLEANUP_TIME must use 24-hour HH:MM format (for example 00:00)"
+    ) from e
+
+CLEANUP_STATE_FILE = os.path.abspath(os.path.join(BASE_DIR, ".cleanup_state.json"))
+CLEANUP_LOCK_FILE = os.path.abspath(os.path.join(BASE_DIR, ".cleanup.lock"))
 PROTECTED_FILES_LIST = os.path.abspath(os.path.join(UPLOAD_FOLDER, '.protected_files.json'))
 PUSH_SUBSCRIPTIONS_FILE = os.path.abspath(os.path.join(BASE_DIR, 'push_subscriptions.json'))
 
@@ -147,24 +166,28 @@ def is_file_protected(filename, filepath):
     return False
 
 def cleanup_expired_uploads():
-    """Delete unprotected uploaded files after the 14-day retention period."""
+    """Delete unprotected regular files older than the configured retention."""
     folder = app.config['UPLOAD_FOLDER']
     if not os.path.isdir(folder):
-        return
+        return True
 
     cutoff_timestamp = time.time() - (UPLOAD_RETENTION_DAYS * 24 * 60 * 60)
     deleted_count = 0
     failed_count = 0
+    scan_failed = False
 
     def log_walk_error(error):
+        nonlocal scan_failed
+        scan_failed = True
         print(f"[Upload Cleanup] Cannot scan directory: {error}", flush=True)
 
-    # Walk recursively so old files cannot survive merely because they are in
-    # a subdirectory. Hidden directories are deliberately left untouched.
+    # Scan recursively, but leave hidden directories and their contents alone.
     for root, dirnames, filenames in os.walk(
         folder, topdown=True, onerror=log_walk_error, followlinks=False
     ):
-        dirnames[:] = [dirname for dirname in dirnames if not dirname.startswith('.')]
+        dirnames[:] = [
+            dirname for dirname in dirnames if not dirname.startswith('.')
+        ]
 
         for filename in filenames:
             filepath = os.path.join(root, filename)
@@ -173,7 +196,7 @@ def cleanup_expired_uploads():
                 continue
 
             try:
-                # Do not follow or remove symlinks; only expire regular files.
+                # Never follow symlinks or delete their targets.
                 if os.path.islink(filepath) or not os.path.isfile(filepath):
                     continue
 
@@ -181,7 +204,7 @@ def cleanup_expired_uploads():
                     os.remove(filepath)
                     deleted_count += 1
             except FileNotFoundError:
-                # Another worker may have removed the same expired file.
+                # Another worker may have removed the same file.
                 continue
             except OSError as e:
                 failed_count += 1
@@ -190,24 +213,129 @@ def cleanup_expired_uploads():
                     flush=True
                 )
 
-    if deleted_count or failed_count:
+    print(
+        f"[Upload Cleanup] Deleted {deleted_count} expired file(s); "
+        f"{failed_count} deletion failure(s).",
+        flush=True
+    )
+    return not scan_failed and failed_count == 0
+
+
+def _read_last_cleanup_date():
+    if not os.path.exists(CLEANUP_STATE_FILE):
+        return None
+
+    try:
+        with open(CLEANUP_STATE_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return data.get('last_cleanup_date')
+    except Exception as e:
         print(
-            f"[Upload Cleanup] Deleted {deleted_count} expired file(s); "
-            f"{failed_count} deletion failure(s).",
+            f"[Upload Cleanup] Could not read cleanup state; "
+            f"will perform a catch-up run: {e}",
+            flush=True
+        )
+        return None
+
+
+def _write_cleanup_date(cleanup_date):
+    # Atomic replacement prevents a partial state file if the process stops
+    # while writing. The lock below serializes all application workers.
+    temp_path = f"{CLEANUP_STATE_FILE}.{os.getpid()}.{uuid.uuid4().hex}.tmp"
+    try:
+        with open(temp_path, 'w', encoding='utf-8') as f:
+            json.dump({'last_cleanup_date': cleanup_date}, f)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temp_path, CLEANUP_STATE_FILE)
+    finally:
+        try:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+        except OSError:
+            pass
+
+
+def run_scheduled_cleanup(now=None):
+    """Run at most once per local calendar day, including after missed runs."""
+    if not UPLOAD_CLEANUP_ENABLED:
+        return True
+
+    now = now or datetime.now()
+    today_str = now.strftime('%Y-%m-%d')
+    scheduled_time = datetime.combine(now.date(), UPLOAD_CLEANUP_SCHEDULE_TIME)
+    if now < scheduled_time:
+        return True
+
+    # Gunicorn/uWSGI or Flask's reloader can import this module more than once.
+    # An OS-level lock ensures only one process performs a given day's cleanup.
+    with open(CLEANUP_LOCK_FILE, 'a', encoding='utf-8') as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        if _read_last_cleanup_date() == today_str:
+            return True
+
+        print(
+            f"[Upload Cleanup] Starting scheduled cleanup at "
+            f"{now.strftime('%Y-%m-%d %H:%M:%S')} "
+            f"(retention: {UPLOAD_RETENTION_DAYS} days).",
             flush=True
         )
 
+        if not cleanup_expired_uploads():
+            print(
+                "[Upload Cleanup] Cleanup was incomplete; it will be retried.",
+                flush=True
+            )
+            return False
+
+        try:
+            _write_cleanup_date(today_str)
+        except OSError as e:
+            print(
+                f"[Upload Cleanup] Could not save cleanup state; "
+                f"the cleanup may run again: {e}",
+                flush=True
+            )
+            return False
+
+    return True
+
+
 def start_scheduled_cleanup():
+    if not UPLOAD_CLEANUP_ENABLED:
+        print(
+            "[Upload Cleanup] Disabled via UPLOAD_CLEANUP_ENABLED.",
+            flush=True
+        )
+        return
+
     def loop():
         while True:
             try:
-                # Run immediately at startup, then re-check every hour. The
-                # per-file age check makes retries safe and idempotent.
-                cleanup_expired_uploads()
-            except Exception as e:
-                print(f"[Upload Cleanup] Unexpected error: {e}", flush=True)
+                now = datetime.now()
+                today_str = now.strftime('%Y-%m-%d')
+                last_cleanup = _read_last_cleanup_date()
+                scheduled_time = datetime.combine(
+                    now.date(), UPLOAD_CLEANUP_SCHEDULE_TIME
+                )
 
-            time.sleep(CLEANUP_CHECK_INTERVAL_SECONDS)
+                if last_cleanup == today_str:
+                    # Today's run is complete; sleep until tomorrow's schedule.
+                    next_run = scheduled_time + timedelta(days=1)
+                elif now >= scheduled_time:
+                    # Also catches up if the service was down at the scheduled
+                    # time. The state file prevents duplicate daily runs.
+                    if not run_scheduled_cleanup(now):
+                        time.sleep(15 * 60)
+                        continue
+                    next_run = scheduled_time + timedelta(days=1)
+                else:
+                    next_run = scheduled_time
+
+                time.sleep(max(1, (next_run - datetime.now()).total_seconds()))
+            except Exception as e:
+                print(f"[Upload Cleanup] Scheduler error: {e}", flush=True)
+                time.sleep(60)
 
     thread = threading.Thread(
         target=loop,
