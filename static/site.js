@@ -8,6 +8,7 @@ document.addEventListener("DOMContentLoaded", () => {
             menuButton.setAttribute("aria-label", isOpen ? "Menü schließen" : "Menü öffnen");
         });
     }
+
     document.querySelectorAll("[data-copy-address]").forEach((button) => {
         button.addEventListener("click", async () => {
             const address = button.dataset.copyAddress;
@@ -33,6 +34,23 @@ document.addEventListener("DOMContentLoaded", () => {
             } catch (error) {
                 window.prompt("Serveradresse manuell kopieren:", address);
             }
+        });
+    });
+
+    document.querySelectorAll("[data-youtube-video]").forEach((container) => {
+        const loadButton = container.querySelector("[data-load-youtube-video]");
+        if (!loadButton) return;
+        loadButton.addEventListener("click", () => {
+            const videoId = container.dataset.youtubeVideo;
+            if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) return;
+            const iframe = document.createElement("iframe");
+            iframe.src = "https://www.youtube-nocookie.com/embed/" + encodeURIComponent(videoId) + "?autoplay=1";
+            iframe.title = container.dataset.videoTitle || "Neuestes YouTube-Video von Greenstone51";
+            iframe.loading = "lazy";
+            iframe.referrerPolicy = "strict-origin-when-cross-origin";
+            iframe.allow = "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
+            iframe.allowFullscreen = true;
+            container.replaceChildren(iframe);
         });
     });
 });
