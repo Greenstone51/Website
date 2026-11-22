@@ -135,19 +135,11 @@ def get_latest_youtube_video():
 
             if page_response is not None and not channel_id:
                 channel_patterns = (
-                    r'"channelId"[ 	
-]*:[ 	
-]*"(UC[A-Za-z0-9_-]{22})"',
-                    r'"externalId"[ 	
-]*:[ 	
-]*"(UC[A-Za-z0-9_-]{22})"',
-                    r'"browseId"[ 	
-]*:[ 	
-]*"(UC[A-Za-z0-9_-]{22})"',
+                    r'"channelId"\s*:\s*"(UC[A-Za-z0-9_-]{22})"',
+                    r'"externalId"\s*:\s*"(UC[A-Za-z0-9_-]{22})"',
+                    r'"browseId"\s*:\s*"(UC[A-Za-z0-9_-]{22})"',
                     r'/channel/(UC[A-Za-z0-9_-]{22})',
-                    r'"channel_id"[ 	
-]*:[ 	
-]*"(UC[A-Za-z0-9_-]{22})"'
+                    r'"channel_id"\s*:\s*"(UC[A-Za-z0-9_-]{22})"'
                 )
                 for pattern in channel_patterns:
                     match = re.search(pattern, page_response.text)
