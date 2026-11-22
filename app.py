@@ -1,4 +1,5 @@
 import os
+import logging
 import io
 import time
 import uuid
@@ -23,6 +24,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = Flask(__name__)
+# Keep application INFO messages visible in systemd/journald in production.
+app.logger.setLevel(logging.INFO)
 
 app.secret_key = os.urandom(32)
 
@@ -211,6 +214,7 @@ def _extract_latest_video_from_youtube_feed(feed_content):
 def _youtube_data_api_get(resource, params, api_key):
     """Call a read-only YouTube Data API endpoint without ever logging the key."""
     endpoint = f"https://www.googleapis.com/youtube/v3/{resource}"
+    app.logger.info("YouTube Data API request started: %s.list", resource)
     request_params = dict(params)
     request_params["key"] = api_key
 
@@ -365,6 +369,7 @@ def get_latest_youtube_video():
         # If it fails, retain the consent-aware public Atom/HTML fallback below.
         youtube_api_key = os.getenv("YOUTUBE_API_KEY", "").strip()
         if youtube_api_key:
+            app.logger.info("YOUTUBE_API_KEY detected; using the official YouTube Data API.")
             try:
                 video = _get_latest_video_from_youtube_api(youtube_api_key)
             except Exception as error:
@@ -387,6 +392,11 @@ def get_latest_youtube_video():
                 return video
             app.logger.warning(
                 "YouTube Data API did not return a video; trying the public feed fallback."
+            )
+
+        if not youtube_api_key:
+            app.logger.warning(
+                "YOUTUBE_API_KEY is not set in the backend environment; using the public-feed fallback."
             )
 
         channel_id = os.getenv("YOUTUBE_CHANNEL_ID", "").strip()
