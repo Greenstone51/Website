@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Biografie, Projekte, YouTube-Kanal und OpenPGP-Public-Key von Greenstone51.">
+    <title>Greenstone51 // Biografie</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="stylesheet" href="/static/style.css?v=21">
+</head>
+<body>
+    {% set active_page = 'bio' %}
+    {% set page_label = 'biografie' %}
+    {% include 'partials/nav.html' %}
+    <main>
+        <div class="page-header"><h1 class="page-title">Über Greenstone51</h1><p class="page-subtitle">Projekte, Server und Kontaktmöglichkeiten an einem Ort.</p></div>
+        <div class="grid bio-grid">
+            <section class="card">
+                <h2 class="card-title">Kurzbiografie</h2>
+                <p class="card-text">Ich bin Greenstone51. Auf dieser Website bündele ich meine eigenen Projekte und Dienste – darunter selbst betriebene Game-Server, File-Sharing und ein VPN-Dashboard.</p>
+                <p class="card-text mt-1">Neben den Serverprojekten veröffentliche ich Videos auf YouTube. Diese Website dient als zentrale Anlaufstelle für meine Projekte und Kontaktinformationen.</p>
+            </section>
+            <section class="card">
+                <h2 class="card-title">YouTube</h2>
+                <p class="card-text mb-15">Auf meinem Kanal <strong>@greenst0ne51</strong> findest du meine Videos und Uploads.</p>
+                <div class="card-actions">
+                    <a href="https://www.youtube.com/@greenst0ne51" class="btn-action" target="_blank" rel="noopener noreferrer">Kanal öffnen</a>
+                    <a href="https://www.youtube.com/@greenst0ne51/videos" class="btn-action btn-outline" target="_blank" rel="noopener noreferrer">Videos ansehen</a>
+                </div>
+            </section>
+        </div>
+        <section class="section-block card card-full">
+            <h2 class="card-title">OpenPGP Public Key</h2>
+            <p class="card-text">Mit diesem öffentlichen Schlüssel kannst du Nachrichten an <a href="mailto:admin@greenstone51.de" class="mail-link">admin@greenstone51.de</a> verschlüsseln und Signaturen prüfen. Teile niemals deinen privaten Schlüssel.</p>
+            <p class="card-text mt-1">Key-ID (Kurzform): <code>0x1CE00C4E</code></p>
+            <div class="card-actions"><a class="btn-action" href="/static/Greenstone51_0x1CE00C4E_public.asc" download>Public Key herunterladen</a></div>
+            <details class="key-details"><summary>Public Key direkt anzeigen</summary><pre class="pgp-key">-----BEGIN PGP PUBLIC KEY BLOCK-----
+
+mDMEasUzuRYJKwYBBAHaRw8BAQdAzTiF+TNR5cNI12aHIbYy7KlA3Vjb65NmCIur
+N8QueT+0JEdyZWVuc3RvbmU1MSA8YWRtaW5AZ3JlZW5zdG9uZTUxLmRlPoivBBMW
+CgBXFiEEqhAdUAemgnS4nP4lAtCT3hzgDE4FAmrFM7kbFIAAAAAABAAObWFudTIs
+Mi41KzEuMTIsMiwxAhsDBQsJCAcCAiICBhUKCQgLAgQWAgMBAh4HAheAAAoJEALQ
+k94c4AxOH70A/0rHjpNX5jyHq51G+CYi/1aQhBVODq3p3UkRp2W1JwPNAQCQsKIN
+1REJ7DWylL/E6BW4L3gEF4kyoLr0CHa9cpfiBbg4BGrFM7kSCisGAQQBl1UBBQEB
+B0DCZCMkQxTZtVmxDEwlRB8U/kYj1TjNwfcdxWlCJjGKYAMBCAeIlAQYFgoAPBYh
+BKoQHVAHpoJ0uJz+JQLQk94c4AxOBQJqxTO5GxSAAAAAAAQADm1hbnUyLDIuNSsx
+LjEyLDIsMQIbDAAKCRAC0JPeHOAMTguQAP9g2j+W+HKOX/HhfHNK32f/fjxzcT0y
+zwJrPfmtSbpjBgEAk1onmlWy1O21QZE4xU6l/AlynC70JrtV8gdjv69xUQ8=
+=YEHW
+-----END PGP PUBLIC KEY BLOCK-----
+</pre></details>
+        </section>
+    </main>
+    <footer>
+        &copy; 2026 Greenstone51. All rights reserved. |
+        <a href="/tos" class="footer-link">ToS</a> |
+        <a href="/datenschutz" class="footer-link">Datenschutz</a> |
+        <a href="/impressum" class="footer-link">Impressum</a> |
+        <a href="/bio" class="footer-link">Biografie</a> |
+        <a href="/logging" class="footer-link">Logging</a>
+    </footer>
+</body>
+</html>
