@@ -57,77 +57,133 @@ _YOUTUBE_CACHE = {"expires": 0.0, "video": None}
 _YOUTUBE_CACHE_LOCK = threading.Lock()
 
 
+def _extract_latest_video_from_youtube_page(page_html):
+    """Read the first upload from YouTube's server-rendered videos tab."""
+    initial_data = None
+    marker = re.search(r"ytInitialData\\s*=\\s*", page_html)
+    if marker:
+        try:
+            initial_data, _ = json.JSONDecoder().raw_decode(page_html[marker.end():])
+        except (json.JSONDecodeError, ValueError):
+            initial_data = None
+
+    if initial_data is None:
+        return None
+
+    def walk(value):
+        if isinstance(value, dict):
+            renderer = value.get("videoRenderer")
+            if isinstance(renderer, dict):
+                video_id = renderer.get("videoId", "")
+                title_data = renderer.get("title", {})
+                title = title_data.get("simpleText", "") if isinstance(title_data, dict) else ""
+                if not title and isinstance(title_data, dict):
+                    runs = title_data.get("runs", [])
+                    if runs and isinstance(runs[0], dict):
+                        title = runs[0].get("text", "")
+                if re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id):
+                    return {
+                        "id": video_id,
+                        "title": title or "Neuestes Video",
+                        "published": renderer.get("publishedTimeText", {}).get("simpleText", ""),
+                        "url": f"https://www.youtube.com/watch?v={video_id}"
+                    }
+            for child in value.values():
+                result = walk(child)
+                if result:
+                    return result
+        elif isinstance(value, list):
+            for child in value:
+                result = walk(child)
+                if result:
+                    return result
+        return None
+
+    return walk(initial_data)
+
+
 def get_latest_youtube_video():
-    """Return the latest channel upload, or None when YouTube is unavailable."""
+    """Fetch the latest public channel upload, with an in-page fallback."""
     now = time.monotonic()
     with _YOUTUBE_CACHE_LOCK:
         if now < _YOUTUBE_CACHE["expires"]:
             return _YOUTUBE_CACHE["video"]
 
         video = None
+        page_response = None
         try:
             channel_id = os.getenv("YOUTUBE_CHANNEL_ID", "").strip()
-            if not channel_id:
+            try:
+                page_response = requests.get(
+                    YOUTUBE_CHANNEL_URL + "/videos",
+                    headers={
+                        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                                      "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+                        "Accept-Language": "en-US,en;q=0.9"
+                    },
+                    timeout=(3, 8)
+                )
+                page_response.raise_for_status()
+            except requests.RequestException:
+                page_response = None
+
+            if page_response is not None and not channel_id:
+                channel_patterns = (
+                    r'"channelId"\\s*:\\s*"(UC[A-Za-z0-9_-]{22})"',
+                    r'"externalId"\\s*:\\s*"(UC[A-Za-z0-9_-]{22})"',
+                    r'"browseId"\\s*:\\s*"(UC[A-Za-z0-9_-]{22})"',
+                    r'/channel/(UC[A-Za-z0-9_-]{22})',
+                    r'"channel_id"\\s*:\\s*"(UC[A-Za-z0-9_-]{22})"'
+                )
+                for pattern in channel_patterns:
+                    match = re.search(pattern, page_response.text)
+                    if match:
+                        channel_id = match.group(1)
+                        break
+
+            # YouTube's current XML feed path uses /xml/feeds/, not /feeds/.
+            if channel_id:
                 try:
-                    response = requests.get(
-                        YOUTUBE_CHANNEL_URL,
+                    feed_response = requests.get(
+                        "https://www.youtube.com/xml/feeds/videos.xml",
+                        params={"channel_id": channel_id},
                         headers={"User-Agent": "Mozilla/5.0 (compatible; Greenstone51Website/1.0)"},
-                        timeout=(2, 4)
+                        timeout=(3, 8)
                     )
-                    response.raise_for_status()
-                except requests.RequestException:
-                    # The user-feed endpoint below is a fallback if the handle
-                    # page cannot be retrieved or no longer exposes its ID.
-                    response = None
-
-                if response is not None:
-                    for pattern in (
-                        r'"channelId"\\s*:\\s*"(UC[A-Za-z0-9_-]{22})"',
-                        r'"externalId"\\s*:\\s*"(UC[A-Za-z0-9_-]{22})"',
-                    ):
-                        match = re.search(pattern, response.text)
-                        if match:
-                            channel_id = match.group(1)
-                            break
-
-            feed_params = (
-                {"channel_id": channel_id}
-                if channel_id else {"user": "greenst0ne51"}
-            )
-            feed_response = requests.get(
-                "https://www.youtube.com/feeds/videos.xml",
-                params=feed_params,
-                headers={"User-Agent": "Mozilla/5.0 (compatible; Greenstone51Website/1.0)"},
-                timeout=(2, 4)
-            )
-            feed_response.raise_for_status()
-
-            root = ET.fromstring(feed_response.content)
-            namespaces = {
-                "atom": "http://www.w3.org/2005/Atom",
-                "yt": "http://www.youtube.com/xml/schemas/2015"
-            }
-            entry = root.find("atom:entry", namespaces)
-            if entry is not None:
-                video_id = entry.findtext("yt:videoId", default="", namespaces=namespaces)
-                title = entry.findtext("atom:title", default="Neues Video", namespaces=namespaces)
-                published = entry.findtext("atom:published", default="", namespaces=namespaces)
-                if re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id):
-                    video = {
-                        "id": video_id,
-                        "title": title,
-                        "published": published,
-                        "url": f"https://www.youtube.com/watch?v={video_id}"
+                    feed_response.raise_for_status()
+                    root = ET.fromstring(feed_response.content)
+                    namespaces = {
+                        "atom": "http://www.w3.org/2005/Atom",
+                        "yt": "http://www.youtube.com/xml/schemas/2015"
                     }
-        except (requests.RequestException, ET.ParseError, ValueError, TypeError):
-            video = None
+                    entry = root.find("atom:entry", namespaces)
+                    if entry is not None:
+                        video_id = entry.findtext("yt:videoId", default="", namespaces=namespaces)
+                        title = entry.findtext("atom:title", default="Neuestes Video", namespaces=namespaces)
+                        published = entry.findtext("atom:published", default="", namespaces=namespaces)
+                        if re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id):
+                            video = {
+                                "id": video_id,
+                                "title": title,
+                                "published": published,
+                                "url": f"https://www.youtube.com/watch?v={video_id}"
+                            }
+                except (requests.RequestException, ET.ParseError, ValueError, TypeError):
+                    video = None
+
+            # Feed fallback: parse the videos tab itself. This also avoids
+            # relying on YouTube's intermittently unavailable XML feed.
+            if video is None and page_response is not None:
+                video = _extract_latest_video_from_youtube_page(page_response.text)
+
         except Exception:
-            # Keep the homepage available if YouTube changes its response format.
+            # The homepage and biography must remain available during outages.
             video = None
 
         _YOUTUBE_CACHE["video"] = video
         _YOUTUBE_CACHE["expires"] = now + (YOUTUBE_CACHE_TTL if video else 180)
         return video
+
 
 UPLOAD_FOLDER = os.path.abspath(os.path.join(BASE_DIR, 'uploads'))
 DOWNLOAD_FOLDER = UPLOAD_FOLDER
@@ -519,7 +575,7 @@ def assetto_corsa_page():
 @app.route('/bio')
 @app.route('/biografie')
 def bio_page():
-    return render_template('bio.html')
+    return render_template('bio.html', latest_video=get_latest_youtube_video())
 
 @app.route('/sw.js')
 def service_worker():
