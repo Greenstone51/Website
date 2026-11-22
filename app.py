@@ -62,6 +62,17 @@ _YOUTUBE_CACHE = {"expires": 0.0, "video": None}
 _YOUTUBE_CACHE_LOCK = threading.Lock()
 
 
+def _is_youtube_consent_response(response):
+    """Detect Google's consent interstitial even when it returns HTTP 200."""
+    final_url = (getattr(response, "url", "") or "").lower()
+    body = (getattr(response, "text", "") or "")[:30000].lower()
+    return (
+        "consent.youtube.com" in final_url
+        or "before you continue to youtube" in body
+        or "consent.youtube.com/m" in body
+    )
+
+
 def _extract_youtube_channel_id(page_html):
     """Extract the stable UC channel ID from YouTube's public channel HTML."""
     patterns = (
@@ -226,6 +237,14 @@ def get_latest_youtube_video():
             "Accept-Language": page_headers["Accept-Language"]
         }
 
+        # YouTube redirects anonymous server-side requests to consent.youtube.com
+        # unless a consent state is present. Match yt-dlp's public-browsing
+        # behavior: SOCS=CAI means consent has been accepted (no login required).
+        youtube_session = requests.Session()
+        youtube_session.cookies.set(
+            "SOCS", "CAI", domain=".youtube.com", path="/", secure=True
+        )
+
         try:
             # An explicit ID skips HTML scraping entirely. Otherwise resolve the
             # immutable channel ID from both the Videos tab and the channel page.
@@ -236,12 +255,20 @@ def get_latest_youtube_video():
                 )
                 for page_url in page_urls:
                     try:
-                        response = requests.get(
+                        response = youtube_session.get(
                             page_url,
                             headers=page_headers,
-                            timeout=(3, 8)
+                            timeout=(5, 10)
                         )
                         response.raise_for_status()
+                        if _is_youtube_consent_response(response):
+                            app.logger.warning(
+                                "YouTube still returned its consent interstitial for %s "
+                                "after sending SOCS=CAI (final URL: %s).",
+                                page_url,
+                                response.url
+                            )
+                            continue
                         page_response = response
                         channel_id = _extract_youtube_channel_id(response.text) or ""
                         page_video = _extract_latest_video_from_youtube_page(response.text)
@@ -258,20 +285,28 @@ def get_latest_youtube_video():
             # path is used as the WebSub topic URL, not as the feed-fetch URL.
             if channel_id:
                 try:
-                    feed_response = requests.get(
+                    feed_response = youtube_session.get(
                         YOUTUBE_FEED_URL,
                         params={"channel_id": channel_id},
                         headers=feed_headers,
-                        timeout=(3, 8)
+                        timeout=(5, 10)
                     )
                     feed_response.raise_for_status()
-                    video = _extract_latest_video_from_youtube_feed(feed_response.content)
-                    if video is None:
+                    if _is_youtube_consent_response(feed_response):
                         app.logger.warning(
-                            "YouTube feed returned no valid video entries for channel %s (HTTP %s).",
+                            "YouTube returned a consent interstitial instead of the Atom feed "
+                            "for channel %s (final URL: %s).",
                             channel_id,
-                            feed_response.status_code
+                            feed_response.url
                         )
+                    else:
+                        video = _extract_latest_video_from_youtube_feed(feed_response.content)
+                        if video is None:
+                            app.logger.warning(
+                                "YouTube feed returned no valid video entries for channel %s (HTTP %s).",
+                                channel_id,
+                                feed_response.status_code
+                            )
                 except (requests.RequestException, ET.ParseError, ValueError, TypeError) as error:
                     app.logger.warning(
                         "YouTube Atom feed request or parsing failed for channel %s: %s",
