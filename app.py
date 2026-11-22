@@ -52,9 +52,10 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Latest public upload from the channel handle. The public Atom feed does not
 # require a YouTube Data API key. The feed endpoint (/feeds/) is distinct from
 # the WebSub notification topic path (/xml/feeds/).
-YOUTUBE_CHANNEL_URL = os.getenv(
-    "YOUTUBE_CHANNEL_URL", "https://www.youtube.com/@greenst0ne51"
-).strip().rstrip("/")
+YOUTUBE_CHANNEL_URL = (
+    os.getenv("YOUTUBE_CHANNEL_URL", "").strip().rstrip("/")
+    or "https://www.youtube.com/@greenst0ne51"
+)
 YOUTUBE_FEED_URL = "https://www.youtube.com/feeds/videos.xml"
 YOUTUBE_CACHE_TTL = 900
 _YOUTUBE_CACHE = {"expires": 0.0, "video": None}
@@ -65,7 +66,7 @@ def _extract_youtube_channel_id(page_html):
     """Extract the stable UC channel ID from YouTube's public channel HTML."""
     patterns = (
         r'feeds/videos\.xml\?channel_id=(UC[A-Za-z0-9_-]{22})',
-        r'["\'](?:channelId|externalId|browseId|channel_id)["\']\s*:\s*["\'](UC[A-Za-z0-9_-]{22})["\']',
+        r'["\'](?:channelId|externalId|externalChannelId|browseId|channel_id)["\']\s*:\s*["\'](UC[A-Za-z0-9_-]{22})["\']',
         r'/channel/(UC[A-Za-z0-9_-]{22})',
         r'data-channel-external-id=["\'](UC[A-Za-z0-9_-]{22})["\']',
         r'<meta\b(?=[^>]*\bitemprop=["\']channelId["\'])(?=[^>]*\bcontent=["\'](UC[A-Za-z0-9_-]{22})["\'])[^>]*>'
@@ -206,6 +207,9 @@ def get_latest_youtube_video():
         page_video = None
         page_response = None
         channel_id = os.getenv("YOUTUBE_CHANNEL_ID", "").strip()
+        if channel_id and not re.fullmatch(r"UC[A-Za-z0-9_-]{22}", channel_id):
+            app.logger.warning("Ignoring invalid YOUTUBE_CHANNEL_ID value.")
+            channel_id = ""
 
         page_headers = {
             "User-Agent": (
@@ -233,7 +237,7 @@ def get_latest_youtube_video():
                         response = requests.get(
                             page_url,
                             headers=page_headers,
-                            timeout=(5, 10)
+                            timeout=(3, 8)
                         )
                         response.raise_for_status()
                         page_response = response
@@ -256,7 +260,7 @@ def get_latest_youtube_video():
                         YOUTUBE_FEED_URL,
                         params={"channel_id": channel_id},
                         headers=feed_headers,
-                        timeout=(5, 10)
+                        timeout=(3, 8)
                     )
                     feed_response.raise_for_status()
                     video = _extract_latest_video_from_youtube_feed(feed_response.content)
@@ -298,7 +302,7 @@ def get_latest_youtube_video():
             video = None
 
         _YOUTUBE_CACHE["video"] = video
-        _YOUTUBE_CACHE["expires"] = now + (YOUTUBE_CACHE_TTL if video else 120)
+        _YOUTUBE_CACHE["expires"] = time.monotonic() + (YOUTUBE_CACHE_TTL if video else 120)
         return video
 
 UPLOAD_FOLDER = os.path.abspath(os.path.join(BASE_DIR, 'uploads'))
