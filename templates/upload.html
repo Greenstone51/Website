@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Greenstone51 // Upload</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-    <link rel="stylesheet" href="/static/style.css?v=20">
+    <link rel="stylesheet" href="/static/style.css?v=21">
     <link rel="manifest" href="/static/manifest.json">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">
@@ -40,28 +40,9 @@
 </head>
 <body>
 
-    <header>
-        <a href="/" class="logo">greenstone51 // <span>upload</span></a>
-        <button class="hamburger" onclick="toggleMenu()" aria-label="Menü öffnen">
-            <span></span>
-            <span></span>
-            <span></span>
-        </button>
-        <nav class="nav-desktop">
-            <a href="/" class="nav-link">Home</a>
-            <a href="/upload" class="nav-link active">Upload</a>
-            <a href="/download" class="nav-link">Download</a>
-            <a href="/vpn51" class="nav-link">VPN</a>
-            <a href="/vpn51/admin" class="nav-link">Admin</a>
-        </nav>
-        <nav class="nav-mobile" id="navMobile">
-            <a href="/" class="nav-link">Home</a>
-            <a href="/upload" class="nav-link active">Upload</a>
-            <a href="/download" class="nav-link">Download</a>
-            <a href="/vpn51" class="nav-link">VPN Dashboard</a>
-            <a href="/vpn51/admin" class="nav-link">Admin Center</a>
-        </nav>
-    </header>
+    {% set active_page = 'upload' %}
+{% set page_label = 'upload' %}
+{% include 'partials/nav.html' %}
 
     <main>
         <div class="page-header">
@@ -124,11 +105,7 @@
     </footer>
     
     <script>
-        function toggleMenu() {
-            document.getElementById('navMobile').classList.toggle('open');
-        }
-
-        const dropZone = document.getElementById('dropZone');
+const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
         const submitBtn = document.getElementById('submitBtn');
         const fileListPreview = document.getElementById('fileListPreview');
