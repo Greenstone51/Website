@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="OpenLane – Assetto Corsa Freeroam-Server von Greenstone51 auf der Shutoko Revival Project Map.">
+    <title>Greenstone51 // OpenLane Assetto Corsa</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="stylesheet" href="/static/style.css?v=22">
+</head>
+<body>
+    {% from 'partials/nav.html' import site_header, site_footer %}
+    {{ site_header('', 'openlane') }}
+    <main>
+        <div class="page-header">
+            <h1 class="page-title">OpenLane</h1>
+            <p class="page-subtitle">Greenstone51s Assetto Corsa Freeroam-Server.</p>
+        </div>
+        <section class="card card-full server-hero">
+            <h2 class="card-title">Server beitreten</h2>
+            <div class="server-meta">
+                <div class="server-meta-item">
+                    <span class="server-meta-label">Server / HTTP-Adresse</span>
+                    <span class="server-meta-value">ac.greenstone51.de:8081</span>
+                    <button type="button" class="btn-action mt-1" data-copy-address="ac.greenstone51.de:8081">Adresse kopieren</button>
+                </div>
+                <div class="server-meta-item">
+                    <span class="server-meta-label">Karte</span>
+                    <span class="server-meta-value">Shutoko Revival Project (SRP)</span>
+                </div>
+            </div>
+            <div class="card-actions">
+                <a href="acmanager://race/online/join?ip=ac.greenstone51.de&amp;httpPort=8081" class="btn-action">Mit Content Manager beitreten</a>
+            </div>
+        </section>
+        <section class="section-block card card-full">
+            <h2 class="card-title">Über OpenLane</h2>
+            <p class="card-text">OpenLane läuft mit einer angepassten AssettoServer-Version. Als Map wird Shutoko Revival Project (SRP) verwendet.</p>
+            <div class="card-actions">
+                <a href="https://github.com/Greenstone51/OpenLane-AssettoServer" class="btn-action" target="_blank" rel="noopener noreferrer">Server-Repository auf GitHub</a>
+            </div>
+        </section>
+        <div class="section-block">
+            <a href="/" class="footer-link">&larr; Zurück zur Startseite</a>
+        </div>
+    </main>
+    {{ site_footer() }}
+</body>
+</html>
