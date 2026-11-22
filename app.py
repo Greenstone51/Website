@@ -114,7 +114,8 @@ def _extract_latest_video_from_youtube_page(page_html):
     marker_patterns = (
         r"(?:var\s+)?ytInitialData\s*=\s*",
         r'window\["ytInitialData"\]\s*=\s*',
-        r"window\['ytInitialData'\]\s*=\s*"
+        r"window\['ytInitialData'\]\s*=\s*",
+        r'["\']ytInitialData["\']\s*:\s*'
     )
     decoder = json.JSONDecoder()
     initial_data = None
@@ -220,8 +221,9 @@ def get_latest_youtube_video():
             "Accept-Language": "en-US,en;q=0.9,de;q=0.8"
         }
         feed_headers = {
-            "User-Agent": "Mozilla/5.0 (compatible; Greenstone51Website/1.0)",
-            "Accept": "application/atom+xml,application/xml;q=0.9,*/*;q=0.8"
+            "User-Agent": page_headers["User-Agent"],
+            "Accept": "application/atom+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": page_headers["Accept-Language"]
         }
 
         try:
@@ -301,6 +303,12 @@ def get_latest_youtube_video():
             app.logger.exception("Unexpected error while resolving the latest YouTube upload.")
             video = None
 
+        if video:
+            app.logger.info(
+                "Latest YouTube upload resolved: %s (%s)",
+                video["title"],
+                video["id"]
+            )
         _YOUTUBE_CACHE["video"] = video
         _YOUTUBE_CACHE["expires"] = time.monotonic() + (YOUTUBE_CACHE_TTL if video else 120)
         return video
