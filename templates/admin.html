@@ -5,14 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Greenstone51 // Admin</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-    <link rel="stylesheet" href="/static/style.css?v=21">
+    <link rel="stylesheet" href="/static/style.css?v=22">
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 <body>
+    {% from 'partials/nav.html' import site_header, site_footer %}
 
-    {% set active_page = 'admin' %}
-{% set page_label = 'admin' %}
-{% include 'partials/nav.html' %}
+    {{ site_header('admin', 'admin') }}
 
     <main class="{% if login_mode %}main-centered{% endif %}">
         {% if login_mode %}
@@ -90,14 +89,7 @@
         {% endif %}
     </main>
 
-    <footer>
-        &copy; 2026 Greenstone51. All rights reserved. | 
-        <a href="/tos" class="footer-link">ToS</a> | 
-        <a href="/datenschutz" class="footer-link">Datenschutz</a> | 
-        <a href="/impressum" class="footer-link">Impressum</a> | 
-        <a href="/bio" class="footer-link">Biografie</a> | 
-        <a href="/logging" class="footer-link">Logging</a>
-    </footer>
+    {{ site_footer() }}
 
     <script>
 {% if not login_mode %}
