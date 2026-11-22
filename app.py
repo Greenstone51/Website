@@ -519,7 +519,7 @@ def assetto_corsa_page():
 @app.route('/bio')
 @app.route('/biografie')
 def bio_page():
-    return render_template('bio.html', latest_video=get_latest_youtube_video())
+    return render_template('bio.html')
 
 @app.route('/sw.js')
 def service_worker():
