@@ -416,6 +416,18 @@ def send_web_push_notifications(title, message, target_url="/download"):
 def root_page():
     return render_template('index.html')
 
+@app.route('/bio')
+@app.route('/biografie')
+def bio_page():
+    return render_template('bio.html')
+
+
+@app.route('/logging')
+@app.route('/logs')
+@app.route('/no-logs')
+def logging_page():
+    return render_template('logging.html')
+
 @app.route('/sw.js')
 def service_worker():
     response = send_from_directory(app.static_folder, 'sw.js')
