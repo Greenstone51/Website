@@ -83,31 +83,34 @@ def get_latest_youtube_video():
                         channel_id = match.group(1)
                         break
 
-            if channel_id:
-                feed_response = requests.get(
+            feed_params = (
+                {"channel_id": channel_id}
+                if channel_id else {"user": "greenst0ne51"}
+            )
+            feed_response = requests.get(
                     "https://www.youtube.com/feeds/videos.xml",
-                    params={"channel_id": channel_id},
+                    params=feed_params,
                     headers={"User-Agent": "Mozilla/5.0 (compatible; Greenstone51Website/1.0)"},
                     timeout=(2, 4)
                 )
-                feed_response.raise_for_status()
-                root = ET.fromstring(feed_response.content)
-                namespaces = {
-                    "atom": "http://www.w3.org/2005/Atom",
-                    "yt": "http://www.youtube.com/xml/schemas/2015"
-                }
-                entry = root.find("atom:entry", namespaces)
-                if entry is not None:
-                    video_id = entry.findtext("yt:videoId", default="", namespaces=namespaces)
-                    title = entry.findtext("atom:title", default="Neues Video", namespaces=namespaces)
-                    published = entry.findtext("atom:published", default="", namespaces=namespaces)
-                    if re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id):
-                        video = {
-                            "id": video_id,
-                            "title": title,
-                            "published": published,
-                            "url": f"https://www.youtube.com/watch?v={video_id}"
-                        }
+            feed_response.raise_for_status()
+            root = ET.fromstring(feed_response.content)
+            namespaces = {
+                "atom": "http://www.w3.org/2005/Atom",
+                "yt": "http://www.youtube.com/xml/schemas/2015"
+            }
+            entry = root.find("atom:entry", namespaces)
+            if entry is not None:
+                video_id = entry.findtext("yt:videoId", default="", namespaces=namespaces)
+                title = entry.findtext("atom:title", default="Neues Video", namespaces=namespaces)
+                published = entry.findtext("atom:published", default="", namespaces=namespaces)
+                if re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id):
+                    video = {
+                        "id": video_id,
+                        "title": title,
+                        "published": published,
+                        "url": f"https://www.youtube.com/watch?v={video_id}"
+                    }
         except (requests.RequestException, ET.ParseError, ValueError, TypeError):
             video = None
         except Exception:
