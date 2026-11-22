@@ -5,33 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Greenstone51 // Admin</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-    <link rel="stylesheet" href="/static/style.css?v=19">
+    <link rel="stylesheet" href="/static/style.css?v=21">
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
 </head>
 <body>
 
-    <header>
-        <a href="/" class="logo">greenstone51 // <span>admin</span></a>
-        <button class="hamburger" onclick="toggleMenu()" aria-label="Menü öffnen">
-            <span></span>
-            <span></span>
-            <span></span>
-        </button>
-        <nav class="nav-desktop">
-            <a href="/" class="nav-link">Home</a>
-            <a href="/upload" class="nav-link">Upload</a>
-            <a href="/download" class="nav-link">Download</a>
-            <a href="/vpn51" class="nav-link">VPN</a>
-            <a href="/vpn51/admin" class="nav-link active">Admin</a>
-        </nav>
-        <nav class="nav-mobile" id="navMobile">
-            <a href="/" class="nav-link">Home</a>
-            <a href="/upload" class="nav-link">Upload</a>
-            <a href="/download" class="nav-link">Download</a>
-            <a href="/vpn51" class="nav-link">VPN Dashboard</a>
-            <a href="/vpn51/admin" class="nav-link active">Admin Center</a>
-        </nav>
-    </header>
+    {% set active_page = 'admin' %}
+{% set page_label = 'admin' %}
+{% include 'partials/nav.html' %}
 
     <main class="{% if login_mode %}main-centered{% endif %}">
         {% if login_mode %}
@@ -113,15 +94,13 @@
         &copy; 2026 Greenstone51. All rights reserved. | 
         <a href="/tos" class="footer-link">ToS</a> | 
         <a href="/datenschutz" class="footer-link">Datenschutz</a> | 
-        <a href="/impressum" class="footer-link">Impressum</a>
+        <a href="/impressum" class="footer-link">Impressum</a> | 
+        <a href="/bio" class="footer-link">Biografie</a> | 
+        <a href="/logging" class="footer-link">Logging</a>
     </footer>
 
     <script>
-        function toggleMenu() {
-            document.getElementById('navMobile').classList.toggle('open');
-        }
-
-        {% if not login_mode %}
+{% if not login_mode %}
         function loadSysInfo() {
             fetch('/vpn51/api/admin/sysinfo')
                 .then(res => res.json())
