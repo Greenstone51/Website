@@ -5,13 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Greenstone51 // 404</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-    <link rel="stylesheet" href="/static/style.css?v=21">
+    <link rel="stylesheet" href="/static/style.css?v=22">
 </head>
 <body>
+    {% from 'partials/nav.html' import site_header, site_footer %}
 
-    {% set active_page = '' %}
-{% set page_label = '404' %}
-{% include 'partials/nav.html' %}
+    {{ site_header('', '404') }}
 
     <main class="main-centered">
         <div class="error-container">
@@ -22,14 +21,7 @@
         </div>
     </main>
 
-    <footer>
-        &copy; 2026 Greenstone51. All rights reserved. | 
-        <a href="/tos" class="footer-link">ToS</a> | 
-        <a href="/datenschutz" class="footer-link">Datenschutz</a> | 
-        <a href="/impressum" class="footer-link">Impressum</a> | 
-        <a href="/bio" class="footer-link">Biografie</a> | 
-        <a href="/logging" class="footer-link">Logging</a>
-    </footer>
+    {{ site_footer() }}
 
     
 </body>
