@@ -75,9 +75,8 @@ def get_latest_youtube_video():
                 )
                 response.raise_for_status()
                 for pattern in (
-                    r'"channelId"\\s*:\\s*"(UC[A-Za-z0-9_-]{22})"',
-                    r'"externalId"\\s*:\\s*"(UC[A-Za-z0-9_-]{22})"',
-                    r'<meta[^>]+itemprop=["\\']channelId["\\'][^>]+content=["\\'](UC[A-Za-z0-9_-]{22})'
+                    r'"channelId"\s*:\s*"(UC[A-Za-z0-9_-]{22})"',
+                    r'"externalId"\s*:\s*"(UC[A-Za-z0-9_-]{22})"',
                 ):
                     match = re.search(pattern, response.text)
                     if match:
