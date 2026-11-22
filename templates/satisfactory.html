@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Informationen und Verbindungsdaten zum Satisfactory Dedicated Server von Greenstone51.">
+    <title>Greenstone51 // Satisfactory</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="stylesheet" href="/static/style.css?v=22">
+</head>
+<body>
+    {% from 'partials/nav.html' import site_header, site_footer %}
+    {{ site_header('', 'satisfactory') }}
+    <main>
+        <div class="page-header">
+            <h1 class="page-title">Satisfactory Server</h1>
+            <p class="page-subtitle">Der Satisfactory Dedicated Server von Greenstone51.</p>
+        </div>
+        <section class="card card-full server-hero">
+            <h2 class="card-title">Server beitreten</h2>
+            <p class="card-text">Füge die folgende Adresse im Server-Browser von Satisfactory hinzu.</p>
+            <div class="server-meta">
+                <div class="server-meta-item">
+                    <span class="server-meta-label">Serveradresse</span>
+                    <span class="server-meta-value">satis.greenstone51.de:7777</span>
+                    <button type="button" class="btn-action mt-1" data-copy-address="satis.greenstone51.de:7777">Serveradresse kopieren</button>
+                </div>
+            </div>
+        </section>
+        <div class="section-block">
+            <a href="/" class="footer-link">&larr; Zurück zur Startseite</a>
+        </div>
+    </main>
+    {{ site_footer() }}
+</body>
+</html>
