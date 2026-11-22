@@ -6,12 +6,11 @@
     <meta name="description" content="Biografie, Projekte, YouTube-Kanal und OpenPGP-Public-Key von Greenstone51.">
     <title>Greenstone51 // Biografie</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-    <link rel="stylesheet" href="/static/style.css?v=21">
+    <link rel="stylesheet" href="/static/style.css?v=22">
 </head>
 <body>
-    {% set active_page = 'bio' %}
-    {% set page_label = 'biografie' %}
-    {% include 'partials/nav.html' %}
+    {% from 'partials/nav.html' import site_header, site_footer %}
+    {{ site_header('bio', 'biografie') }}
     <main>
         <div class="page-header"><h1 class="page-title">Über Greenstone51</h1><p class="page-subtitle">Projekte, Server und Kontaktmöglichkeiten an einem Ort.</p></div>
         <div class="grid bio-grid">
@@ -51,13 +50,6 @@ zwJrPfmtSbpjBgEAk1onmlWy1O21QZE4xU6l/AlynC70JrtV8gdjv69xUQ8=
 </pre></details>
         </section>
     </main>
-    <footer>
-        &copy; 2026 Greenstone51. All rights reserved. |
-        <a href="/tos" class="footer-link">ToS</a> |
-        <a href="/datenschutz" class="footer-link">Datenschutz</a> |
-        <a href="/impressum" class="footer-link">Impressum</a> |
-        <a href="/bio" class="footer-link">Biografie</a> |
-        <a href="/logging" class="footer-link">Logging</a>
-    </footer>
+    {{ site_footer() }}
 </body>
 </html>
