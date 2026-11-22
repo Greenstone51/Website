@@ -365,7 +365,17 @@ def get_latest_youtube_video():
         # If it fails, retain the consent-aware public Atom/HTML fallback below.
         youtube_api_key = os.getenv("YOUTUBE_API_KEY", "").strip()
         if youtube_api_key:
-            video = _get_latest_video_from_youtube_api(youtube_api_key)
+            try:
+                video = _get_latest_video_from_youtube_api(youtube_api_key)
+            except Exception as error:
+                # Keep malformed/unexpected API responses from breaking page views.
+                # Log only the exception type; never log a request URL or API key.
+                app.logger.warning(
+                    "YouTube Data API response processing failed (%s).",
+                    type(error).__name__
+                )
+                video = None
+
             if video:
                 app.logger.info(
                     "Latest YouTube upload resolved through Data API: %s (%s)",
