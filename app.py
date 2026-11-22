@@ -208,6 +208,148 @@ def _extract_latest_video_from_youtube_feed(feed_content):
     }
 
 
+def _youtube_data_api_get(resource, params, api_key):
+    """Call a read-only YouTube Data API endpoint without ever logging the key."""
+    endpoint = f"https://www.googleapis.com/youtube/v3/{resource}"
+    request_params = dict(params)
+    request_params["key"] = api_key
+
+    try:
+        response = requests.get(
+            endpoint,
+            params=request_params,
+            headers={"Accept": "application/json"},
+            timeout=(3, 8)
+        )
+    except requests.RequestException as error:
+        # Never log the exception text: request URLs can contain the API key.
+        app.logger.warning(
+            "YouTube Data API %s request failed (%s).",
+            resource,
+            type(error).__name__
+        )
+        return None
+
+    try:
+        payload = response.json()
+    except ValueError:
+        app.logger.warning(
+            "YouTube Data API %s returned non-JSON content (HTTP %s).",
+            resource,
+            response.status_code
+        )
+        return None
+
+    if response.status_code != 200:
+        error_data = payload.get("error", {}) if isinstance(payload, dict) else {}
+        errors = error_data.get("errors", []) if isinstance(error_data, dict) else []
+        reason = (
+            errors[0].get("reason", "unknown")
+            if errors and isinstance(errors[0], dict)
+            else "unknown"
+        )
+        app.logger.warning(
+            "YouTube Data API %s failed (HTTP %s, reason=%s).",
+            resource,
+            response.status_code,
+            reason
+        )
+        return None
+
+    return payload if isinstance(payload, dict) else None
+
+
+def _get_latest_video_from_youtube_api(api_key):
+    """Resolve the channel's uploads playlist and return its newest accessible video."""
+    channel_data = _youtube_data_api_get(
+        "channels",
+        {
+            "part": "contentDetails",
+            "forHandle": "@greenst0ne51",
+            "maxResults": 1
+        },
+        api_key
+    )
+    if not channel_data:
+        return None
+
+    channels = channel_data.get("items", [])
+    if not isinstance(channels, list) or not channels:
+        app.logger.warning(
+            "YouTube Data API did not find a channel for @greenst0ne51."
+        )
+        return None
+
+    channel = channels[0] if isinstance(channels[0], dict) else {}
+    uploads_playlist_id = (
+        channel.get("contentDetails", {})
+        .get("relatedPlaylists", {})
+        .get("uploads", "")
+    )
+    if not uploads_playlist_id:
+        app.logger.warning(
+            "YouTube Data API returned no uploads playlist for @greenst0ne51."
+        )
+        return None
+
+    playlist_data = _youtube_data_api_get(
+        "playlistItems",
+        {
+            "part": "snippet,contentDetails,status",
+            "playlistId": uploads_playlist_id,
+            "maxResults": 5
+        },
+        api_key
+    )
+    if not playlist_data:
+        return None
+
+    items = playlist_data.get("items", [])
+    if not isinstance(items, list):
+        return None
+
+    # The uploads playlist is returned in its playlist order. Skip unavailable
+    # entries instead of allowing a deleted/private item to hide the next upload.
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        snippet = item.get("snippet", {})
+        if not isinstance(snippet, dict):
+            continue
+        status = item.get("status", {})
+        if isinstance(status, dict) and status.get("privacyStatus") == "private":
+            continue
+
+        resource = snippet.get("resourceId", {})
+        content_details = item.get("contentDetails", {})
+        video_id = ""
+        if isinstance(resource, dict):
+            video_id = resource.get("videoId", "")
+        if not video_id and isinstance(content_details, dict):
+            video_id = content_details.get("videoId", "")
+
+        if not isinstance(video_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id):
+            continue
+
+        published = ""
+        if isinstance(content_details, dict):
+            published = content_details.get("videoPublishedAt", "")
+        if not published:
+            published = snippet.get("publishedAt", "")
+
+        return {
+            "id": video_id,
+            "title": snippet.get("title") or "Neuestes Video",
+            "published": published,
+            "url": f"https://www.youtube.com/watch?v={video_id}"
+        }
+
+    app.logger.warning(
+        "YouTube Data API found the uploads playlist but no accessible video in its first five entries."
+    )
+    return None
+
+
 def get_latest_youtube_video():
     """Fetch the latest public upload, with HTML fallback and visible diagnostics."""
     now = time.monotonic()
@@ -218,6 +360,25 @@ def get_latest_youtube_video():
         video = None
         page_video = None
         page_response = None
+
+        # Prefer the official YouTube Data API when a server-side key is configured.
+        # If it fails, retain the consent-aware public Atom/HTML fallback below.
+        youtube_api_key = os.getenv("YOUTUBE_API_KEY", "").strip()
+        if youtube_api_key:
+            video = _get_latest_video_from_youtube_api(youtube_api_key)
+            if video:
+                app.logger.info(
+                    "Latest YouTube upload resolved through Data API: %s (%s)",
+                    video["title"],
+                    video["id"]
+                )
+                _YOUTUBE_CACHE["video"] = video
+                _YOUTUBE_CACHE["expires"] = time.monotonic() + YOUTUBE_CACHE_TTL
+                return video
+            app.logger.warning(
+                "YouTube Data API did not return a video; trying the public feed fallback."
+            )
+
         channel_id = os.getenv("YOUTUBE_CHANNEL_ID", "").strip()
         if channel_id and not re.fullmatch(r"UC[A-Za-z0-9_-]{22}", channel_id):
             app.logger.warning("Ignoring invalid YOUTUBE_CHANNEL_ID value.")
