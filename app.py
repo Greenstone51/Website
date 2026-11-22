@@ -60,12 +60,17 @@ _YOUTUBE_CACHE_LOCK = threading.Lock()
 def _extract_latest_video_from_youtube_page(page_html):
     """Read the first upload from YouTube's server-rendered videos tab."""
     initial_data = None
-    marker = re.search(r"ytInitialData\\s*=\\s*", page_html)
-    if marker:
-        try:
-            initial_data, _ = json.JSONDecoder().raw_decode(page_html[marker.end():])
-        except (json.JSONDecodeError, ValueError):
-            initial_data = None
+    markers = ("var ytInitialData = ", "ytInitialData = ", "ytInitialData=")
+    for marker in markers:
+        marker_index = page_html.find(marker)
+        if marker_index >= 0:
+            data_start = marker_index + len(marker)
+            try:
+                initial_data, _ = json.JSONDecoder().raw_decode(page_html[data_start:])
+            except (json.JSONDecodeError, ValueError):
+                initial_data = None
+            if initial_data is not None:
+                break
 
     if initial_data is None:
         return None
@@ -82,10 +87,11 @@ def _extract_latest_video_from_youtube_page(page_html):
                     if runs and isinstance(runs[0], dict):
                         title = runs[0].get("text", "")
                 if re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id):
+                    published_data = renderer.get("publishedTimeText", {})
                     return {
                         "id": video_id,
                         "title": title or "Neuestes Video",
-                        "published": renderer.get("publishedTimeText", {}).get("simpleText", ""),
+                        "published": published_data.get("simpleText", "") if isinstance(published_data, dict) else "",
                         "url": f"https://www.youtube.com/watch?v={video_id}"
                     }
             for child in value.values():
@@ -129,11 +135,19 @@ def get_latest_youtube_video():
 
             if page_response is not None and not channel_id:
                 channel_patterns = (
-                    r'"channelId"\\s*:\\s*"(UC[A-Za-z0-9_-]{22})"',
-                    r'"externalId"\\s*:\\s*"(UC[A-Za-z0-9_-]{22})"',
-                    r'"browseId"\\s*:\\s*"(UC[A-Za-z0-9_-]{22})"',
+                    r'"channelId"[ 	
+]*:[ 	
+]*"(UC[A-Za-z0-9_-]{22})"',
+                    r'"externalId"[ 	
+]*:[ 	
+]*"(UC[A-Za-z0-9_-]{22})"',
+                    r'"browseId"[ 	
+]*:[ 	
+]*"(UC[A-Za-z0-9_-]{22})"',
                     r'/channel/(UC[A-Za-z0-9_-]{22})',
-                    r'"channel_id"\\s*:\\s*"(UC[A-Za-z0-9_-]{22})"'
+                    r'"channel_id"[ 	
+]*:[ 	
+]*"(UC[A-Za-z0-9_-]{22})"'
                 )
                 for pattern in channel_patterns:
                     match = re.search(pattern, page_response.text)
@@ -171,8 +185,7 @@ def get_latest_youtube_video():
                 except (requests.RequestException, ET.ParseError, ValueError, TypeError):
                     video = None
 
-            # Feed fallback: parse the videos tab itself. This also avoids
-            # relying on YouTube's intermittently unavailable XML feed.
+            # If the XML feed is unavailable, parse YouTube's videos tab itself.
             if video is None and page_response is not None:
                 video = _extract_latest_video_from_youtube_page(page_response.text)
 
@@ -183,7 +196,6 @@ def get_latest_youtube_video():
         _YOUTUBE_CACHE["video"] = video
         _YOUTUBE_CACHE["expires"] = now + (YOUTUBE_CACHE_TTL if video else 180)
         return video
-
 
 UPLOAD_FOLDER = os.path.abspath(os.path.join(BASE_DIR, 'uploads'))
 DOWNLOAD_FOLDER = UPLOAD_FOLDER
