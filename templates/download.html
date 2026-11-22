@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Greenstone51 // Download</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-    <link rel="stylesheet" href="/static/style.css?v=20">
+    <link rel="stylesheet" href="/static/style.css?v=21">
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     <script type="application/ld+json">
 {
@@ -36,28 +36,9 @@
 </head>
 <body id="pageBody">
 
-    <header>
-        <a href="/" class="logo">greenstone51 // <span>download</span></a>
-        <button class="hamburger" onclick="toggleMenu()" aria-label="Menü öffnen">
-            <span></span>
-            <span></span>
-            <span></span>
-        </button>
-        <nav class="nav-desktop">
-            <a href="/" class="nav-link">Home</a>
-            <a href="/upload" class="nav-link">Upload</a>
-            <a href="/download" class="nav-link active">Download</a>
-            <a href="/vpn51" class="nav-link">VPN</a>
-            <a href="/vpn51/admin" class="nav-link">Admin</a>
-        </nav>
-        <nav class="nav-mobile" id="navMobile">
-            <a href="/" class="nav-link">Home</a>
-            <a href="/upload" class="nav-link">Upload</a>
-            <a href="/download" class="nav-link active">Download</a>
-            <a href="/vpn51" class="nav-link">VPN Dashboard</a>
-            <a href="/vpn51/admin" class="nav-link">Admin Center</a>
-        </nav>
-    </header>
+    {% set active_page = 'download' %}
+{% set page_label = 'download' %}
+{% include 'partials/nav.html' %}
 
     <main>
         <div class="page-header">
@@ -115,7 +96,9 @@
         &copy; 2026 Greenstone51. All rights reserved. | 
         <a href="/tos" class="footer-link">ToS</a> | 
         <a href="/datenschutz" class="footer-link">Datenschutz</a> | 
-        <a href="/impressum" class="footer-link">Impressum</a>
+        <a href="/impressum" class="footer-link">Impressum</a> | 
+        <a href="/bio" class="footer-link">Biografie</a> | 
+        <a href="/logging" class="footer-link">Logging</a>
     </footer>
     
     <script>
@@ -156,12 +139,7 @@
         }
 
         const supportsHover = window.matchMedia('(hover: hover)').matches && !isRealTouchDevice;
-
-        function toggleMenu() {
-            document.getElementById('navMobile').classList.toggle('open');
-        }
-
-        let currentFiles = [];
+let currentFiles = [];
         let selectedFiles = new Set();
         let currentHoverUrl = '';
         const textCache = new Map();
