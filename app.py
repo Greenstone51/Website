@@ -11,6 +11,8 @@ import requests
 import psutil
 import zipfile
 import mimetypes
+import re
+import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 from collections import defaultdict
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, send_from_directory, send_file, abort
@@ -46,6 +48,77 @@ VAPID_PRIVATE_KEY = os.getenv("VAPID_PRIVATE_KEY", "private_key.pem")
 VAPID_CLAIM_EMAIL = os.getenv("VAPID_CLAIM_EMAIL", "mailto:admin@greenstone51.de")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Latest public upload from the channel handle. Cache briefly to avoid
+# requesting YouTube on every homepage view; no API key is required.
+YOUTUBE_CHANNEL_URL = "https://www.youtube.com/@greenst0ne51"
+YOUTUBE_CACHE_TTL = 900
+_YOUTUBE_CACHE = {"expires": 0.0, "video": None}
+_YOUTUBE_CACHE_LOCK = threading.Lock()
+
+
+def get_latest_youtube_video():
+    """Return the latest channel upload, or None when YouTube is unavailable."""
+    now = time.monotonic()
+    with _YOUTUBE_CACHE_LOCK:
+        if now < _YOUTUBE_CACHE["expires"]:
+            return _YOUTUBE_CACHE["video"]
+
+        video = None
+        try:
+            channel_id = os.getenv("YOUTUBE_CHANNEL_ID", "").strip()
+            if not channel_id:
+                response = requests.get(
+                    YOUTUBE_CHANNEL_URL,
+                    headers={"User-Agent": "Mozilla/5.0 (compatible; Greenstone51Website/1.0)"},
+                    timeout=(2, 4)
+                )
+                response.raise_for_status()
+                for pattern in (
+                    r'"channelId"\\s*:\\s*"(UC[A-Za-z0-9_-]{22})"',
+                    r'"externalId"\\s*:\\s*"(UC[A-Za-z0-9_-]{22})"',
+                    r'<meta[^>]+itemprop=["\\']channelId["\\'][^>]+content=["\\'](UC[A-Za-z0-9_-]{22})'
+                ):
+                    match = re.search(pattern, response.text)
+                    if match:
+                        channel_id = match.group(1)
+                        break
+
+            if channel_id:
+                feed_response = requests.get(
+                    "https://www.youtube.com/feeds/videos.xml",
+                    params={"channel_id": channel_id},
+                    headers={"User-Agent": "Mozilla/5.0 (compatible; Greenstone51Website/1.0)"},
+                    timeout=(2, 4)
+                )
+                feed_response.raise_for_status()
+                root = ET.fromstring(feed_response.content)
+                namespaces = {
+                    "atom": "http://www.w3.org/2005/Atom",
+                    "yt": "http://www.youtube.com/xml/schemas/2015"
+                }
+                entry = root.find("atom:entry", namespaces)
+                if entry is not None:
+                    video_id = entry.findtext("yt:videoId", default="", namespaces=namespaces)
+                    title = entry.findtext("atom:title", default="Neues Video", namespaces=namespaces)
+                    published = entry.findtext("atom:published", default="", namespaces=namespaces)
+                    if re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id):
+                        video = {
+                            "id": video_id,
+                            "title": title,
+                            "published": published,
+                            "url": f"https://www.youtube.com/watch?v={video_id}"
+                        }
+        except (requests.RequestException, ET.ParseError, ValueError, TypeError):
+            video = None
+        except Exception:
+            # Keep the homepage available if YouTube changes its response format.
+            video = None
+
+        _YOUTUBE_CACHE["video"] = video
+        _YOUTUBE_CACHE["expires"] = now + (YOUTUBE_CACHE_TTL if video else 180)
+        return video
+
 UPLOAD_FOLDER = os.path.abspath(os.path.join(BASE_DIR, 'uploads'))
 DOWNLOAD_FOLDER = UPLOAD_FOLDER
 # Upload cleanup settings (read from .env / process environment).
@@ -414,19 +487,29 @@ def send_web_push_notifications(title, message, target_url="/download"):
 
 @app.route('/')
 def root_page():
-    return render_template('index.html')
+    return render_template('index.html', latest_video=get_latest_youtube_video())
+
+
+@app.route('/minecraft')
+def minecraft_page():
+    return render_template('minecraft.html')
+
+
+@app.route('/satisfactory')
+def satisfactory_page():
+    return render_template('satisfactory.html')
+
+
+@app.route('/assetto-corsa')
+@app.route('/openlane')
+def assetto_corsa_page():
+    return render_template('assetto_corsa.html')
+
 
 @app.route('/bio')
 @app.route('/biografie')
 def bio_page():
-    return render_template('bio.html')
-
-
-@app.route('/logging')
-@app.route('/logs')
-@app.route('/no-logs')
-def logging_page():
-    return render_template('logging.html')
+    return render_template('bio.html', latest_video=get_latest_youtube_video())
 
 @app.route('/sw.js')
 def service_worker():
