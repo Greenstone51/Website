@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Greenstone51 // VPN Dashboard</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-    <link rel="stylesheet" href="/static/style.css?v=19">
+    <link rel="stylesheet" href="/static/style.css?v=21">
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     <script type="application/ld+json">
 {
@@ -30,28 +30,9 @@
 </head>
 <body>
 
-    <header>
-        <a href="/" class="logo">greenstone51 // <span>vpn51</span></a>
-        <button class="hamburger" onclick="toggleMenu()" aria-label="Menü öffnen">
-            <span></span>
-            <span></span>
-            <span></span>
-        </button>
-        <nav class="nav-desktop">
-            <a href="/" class="nav-link">Home</a>
-            <a href="/upload" class="nav-link">Upload</a>
-            <a href="/download" class="nav-link">Download</a>
-            <a href="/vpn51" class="nav-link active">VPN</a>
-            <a href="/vpn51/admin" class="nav-link">Admin</a>
-        </nav>
-        <nav class="nav-mobile" id="navMobile">
-            <a href="/" class="nav-link">Home</a>
-            <a href="/upload" class="nav-link">Upload</a>
-            <a href="/download" class="nav-link">Download</a>
-            <a href="/vpn51" class="nav-link active">VPN Dashboard</a>
-            <a href="/vpn51/admin" class="nav-link">Admin Center</a>
-        </nav>
-    </header>
+    {% set active_page = 'vpn' %}
+{% set page_label = 'vpn51' %}
+{% include 'partials/nav.html' %}
 
     <main>
         <div class="page-header">
@@ -126,11 +107,7 @@
     </footer>
 
     <script>
-        function toggleMenu() {
-            document.getElementById('navMobile').classList.toggle('open');
-        }
-
-        let vlessConfigString = "";
+let vlessConfigString = "";
 
         function updateStats() {
             fetch('/vpn51/api/stats')
