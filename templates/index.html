@@ -3,128 +3,93 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Greenstone51 – Game-Server, Homeserver-Projekte und YouTube.">
     <title>Greenstone51 // Home</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-    <link rel="stylesheet" href="/static/style.css?v=19">
+    <link rel="stylesheet" href="/static/style.css?v=21">
     <script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "WebSite",
-  "name": "Greenstone51's Homeserver",
-  "alternateName": ["Greenstone51", "Greenstone 51", "Greenstone51 Server", "Greenstones Server", "Greenstone51's Server", "Greenstone51 Homeserver"],
-  "url": "https://greenstone51.de/",
-  "author": {
-    "@type": "Person",
-    "name": "Greenstone51",
-    "url": "https://greenstone51.de/"
-  }
-}
-</script>
-
-<script type="application/ld+json">
-{
-  "@context": "https://schema.org",
-  "@type": "BreadcrumbList",
-  "itemListElement": [
     {
-      "@type": "ListItem",
-      "position": 1,
-      "name": "Home",
-      "item": "https://greenstone51.de/"
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "Greenstone51",
+      "url": "https://greenstone51.de/",
+      "author": {"@type": "Person", "name": "Greenstone51", "url": "https://greenstone51.de/bio"}
     }
-  ]
-}
-</script>
+    </script>
 </head>
 <body>
-
-    <header>
-        <a href="/" class="logo">greenstone51 //</a>
-        <button class="hamburger" onclick="toggleMenu()" aria-label="Menü öffnen">
-            <span></span>
-            <span></span>
-            <span></span>
-        </button>
-        <nav class="nav-desktop">
-            <a href="/" class="nav-link active">Home</a>
-            <a href="/upload" class="nav-link">Upload</a>
-            <a href="/download" class="nav-link">Download</a>
-            <a href="/vpn51" class="nav-link">VPN</a>
-            <a href="/vpn51/admin" class="nav-link">Admin</a>
-        </nav>
-        <nav class="nav-mobile" id="navMobile">
-            <a href="/" class="nav-link active">Home</a>
-            <a href="/upload" class="nav-link">Upload</a>
-            <a href="/download" class="nav-link">Download</a>
-            <a href="/vpn51" class="nav-link">VPN Dashboard</a>
-            <a href="/vpn51/admin" class="nav-link">Admin Center</a>
-        </nav>
-    </header>
-
+    {% set active_page = 'home' %}
+    {% set page_label = '' %}
+    {% include 'partials/nav.html' %}
     <main>
         <div class="page-header">
             <h1 class="page-title">Homeserver, ein Kaliber größer.</h1>
-            <p class="page-subtitle">Willkommen auf meinem semi-privaten Server. Hier befinden sich verschiedene Services.</p>
+            <p class="page-subtitle">Eigene Game-Server, Self-Hosted Services und Projekte von Greenstone51.</p>
         </div>
-
-        <h2 class="section-title">Aktuelle Services</h2>
+        <h2 class="section-title">Game-Server</h2>
         <div class="grid">
-            <div class="card">
-                <div>
-                    <h3 class="card-title">01 / VPN51</h3>
-                    <p class="card-text mb-15">Dashboard zum VPN Dienst mit Live-Metriken und Zugangsdaten.</p>
+            <article class="card server-card">
+                <div class="server-card-content">
+                    <h3 class="card-title">01 / Minecraft Bunker</h3>
+                    <p class="card-text">Eigener Minecraft-Server im ABC-Bunker-Theme – mit langer Geschichte.</p>
+                    <p class="server-address"><span>Serveradresse</span><code>mc.greenstone51.de:26951</code></p>
                 </div>
-                <a href="/vpn51" class="btn-action text-center">Dashboard öffnen &rarr;</a>
-            </div>
-
-            <div class="card">
-                <div>
-                    <h3 class="card-title">02 / Minecraft Bunker</h3>
-                    <p class="card-text">Eigener Minecraft Server mit langer Geschichte im ABC-Bunker Theme. Erreichbar auf mc.greenstone51.de:26951</p>
+                <div class="card-actions"><button type="button" class="btn-action" data-copy-address="mc.greenstone51.de:26951">Serveradresse kopieren</button></div>
+            </article>
+            <article class="card server-card">
+                <div class="server-card-content">
+                    <h3 class="card-title">02 / Satisfactory</h3>
+                    <p class="card-text">Eigener Satisfactory Dedicated Server.</p>
+                    <p class="server-address"><span>Serveradresse</span><code>satis.greenstone51.de:7777</code></p>
                 </div>
-            </div>
-
-            <div class="card">
-                <div>
-                    <h3 class="card-title">03 / Satisfactory Server</h3>
-                    <p class="card-text">Eigener Satisfactory Server. Erreichbar auf satis.greenstone51.de:7777</p>
+                <div class="card-actions"><button type="button" class="btn-action" data-copy-address="satis.greenstone51.de:7777">Serveradresse kopieren</button></div>
+            </article>
+            <article class="card server-card">
+                <div class="server-card-content">
+                    <h3 class="card-title">03 / OpenLane – Assetto Corsa</h3>
+                    <p class="card-text">Eigener Assetto Corsa Server. Der Join-Link öffnet Content Manager, sofern die App installiert und als Protokollhandler registriert ist.</p>
+                    <p class="server-address"><span>Serveradresse</span><code>ac.greenstone51.de:8081</code></p>
                 </div>
-            </div>
-
-            <div class="card">
-                <div>
-                    <h3 class="card-title">04 / OpenLane</h3>
-                    <p class="card-text mb-15">Eigener Assetto Corsa Server. Erreichbar auf ac.greenstone51.de:8081</p>
+                <div class="card-actions">
+                    <a href="acmanager://race/online/join?ip=ac.greenstone51.de&amp;httpPort=8081" class="btn-action">Mit Content Manager beitreten</a>
+                    <button type="button" class="btn-action btn-outline" data-copy-address="ac.greenstone51.de:8081">Adresse kopieren</button>
                 </div>
-            <div class="btn-group">
-                    <a href="acmanager://race/online/join?ip=ac.greenstone51.de&httpPort=8081" class="btn-action">Jetzt Spielen</a>
-                </div>
-            </div>
-            
-            <div class="card">
-                <div>
-                    <h3 class="card-title">05 / File Sharing</h3>
-                    <p class="card-text mb-15">Hier können Dateien hochgeladen, als Vorschau betrachtet und heruntergeladen werden.</p>
-                </div>
-                <div class="btn-group">
-                    <a href="/upload" class="btn-action">Hochladen</a>
-                    <a href="/download" class="btn-action">Herunterladen</a>
-                </div>
-            </div>
+            </article>
         </div>
+        <section class="section-block">
+            <h2 class="section-title">Weitere Services</h2>
+            <div class="grid">
+                <article class="card">
+                    <div class="server-card-content"><h3 class="card-title">04 / VPN51</h3><p class="card-text mb-15">Dashboard zum VPN-Dienst mit Live-Metriken und Zugangsdaten.</p></div>
+                    <div class="card-actions"><a href="/vpn51" class="btn-action">Dashboard öffnen</a></div>
+                </article>
+                <article class="card">
+                    <div class="server-card-content"><h3 class="card-title">05 / File Sharing</h3><p class="card-text mb-15">Dateien hochladen, als Vorschau ansehen und herunterladen.</p></div>
+                    <div class="card-actions">
+                        <a href="/upload" class="btn-action">Hochladen</a>
+                        <a href="/download" class="btn-action btn-outline">Herunterladen</a>
+                    </div>
+                </article>
+            </div>
+        </section>
+        <section class="section-block">
+            <h2 class="section-title">YouTube</h2>
+            <div class="card card-full youtube-card">
+                <div><h3 class="card-title">@greenst0ne51</h3><p class="card-text">Auf meinem YouTube-Kanal findest du meine veröffentlichten Videos und weitere Inhalte. Über die Biografie-Seite gibt es außerdem die zentralen Kontakt- und Projektlinks.</p></div>
+                <div class="card-actions">
+                    <a href="https://www.youtube.com/@greenst0ne51" class="btn-action" target="_blank" rel="noopener noreferrer">YouTube-Kanal öffnen</a>
+                    <a href="https://www.youtube.com/@greenst0ne51/videos" class="btn-action btn-outline" target="_blank" rel="noopener noreferrer">Alle Videos ansehen</a>
+                </div>
+            </div>
+        </section>
     </main>
-
     <footer>
-        &copy; 2026 Greenstone51. All rights reserved. | 
-        <a href="/tos" class="footer-link">ToS</a> | 
-        <a href="/datenschutz" class="footer-link">Datenschutz</a> | 
-        <a href="/impressum" class="footer-link">Impressum</a>
+        &copy; 2026 Greenstone51. All rights reserved. |
+        <a href="/tos" class="footer-link">ToS</a> |
+        <a href="/datenschutz" class="footer-link">Datenschutz</a> |
+        <a href="/impressum" class="footer-link">Impressum</a> |
+        <a href="/bio" class="footer-link">Biografie</a> |
+        <a href="/logging" class="footer-link">Logging</a>
     </footer>
-    
-    <script>
-        function toggleMenu() {
-            document.getElementById('navMobile').classList.toggle('open');
-        }
-    </script>
 </body>
 </html>
