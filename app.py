@@ -68,32 +68,40 @@ def get_latest_youtube_video():
         try:
             channel_id = os.getenv("YOUTUBE_CHANNEL_ID", "").strip()
             if not channel_id:
-                response = requests.get(
-                    YOUTUBE_CHANNEL_URL,
-                    headers={"User-Agent": "Mozilla/5.0 (compatible; Greenstone51Website/1.0)"},
-                    timeout=(2, 4)
-                )
-                response.raise_for_status()
-                for pattern in (
-                    r'"channelId"\s*:\s*"(UC[A-Za-z0-9_-]{22})"',
-                    r'"externalId"\s*:\s*"(UC[A-Za-z0-9_-]{22})"',
-                ):
-                    match = re.search(pattern, response.text)
-                    if match:
-                        channel_id = match.group(1)
-                        break
+                try:
+                    response = requests.get(
+                        YOUTUBE_CHANNEL_URL,
+                        headers={"User-Agent": "Mozilla/5.0 (compatible; Greenstone51Website/1.0)"},
+                        timeout=(2, 4)
+                    )
+                    response.raise_for_status()
+                except requests.RequestException:
+                    # The user-feed endpoint below is a fallback if the handle
+                    # page cannot be retrieved or no longer exposes its ID.
+                    response = None
+
+                if response is not None:
+                    for pattern in (
+                        r'"channelId"\\s*:\\s*"(UC[A-Za-z0-9_-]{22})"',
+                        r'"externalId"\\s*:\\s*"(UC[A-Za-z0-9_-]{22})"',
+                    ):
+                        match = re.search(pattern, response.text)
+                        if match:
+                            channel_id = match.group(1)
+                            break
 
             feed_params = (
                 {"channel_id": channel_id}
                 if channel_id else {"user": "greenst0ne51"}
             )
             feed_response = requests.get(
-                    "https://www.youtube.com/feeds/videos.xml",
-                    params=feed_params,
-                    headers={"User-Agent": "Mozilla/5.0 (compatible; Greenstone51Website/1.0)"},
-                    timeout=(2, 4)
-                )
+                "https://www.youtube.com/feeds/videos.xml",
+                params=feed_params,
+                headers={"User-Agent": "Mozilla/5.0 (compatible; Greenstone51Website/1.0)"},
+                timeout=(2, 4)
+            )
             feed_response.raise_for_status()
+
             root = ET.fromstring(feed_response.content)
             namespaces = {
                 "atom": "http://www.w3.org/2005/Atom",
