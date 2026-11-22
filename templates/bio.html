@@ -6,7 +6,7 @@
     <meta name="description" content="Biografie, Projekte, YouTube-Kanal und OpenPGP-Public-Key von Greenstone51.">
     <title>Greenstone51 // Biografie</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-    <link rel="stylesheet" href="/static/style.css?v=22">
+    <link rel="stylesheet" href="/static/style.css?v=23">
 </head>
 <body>
     {% from 'partials/nav.html' import site_header, site_footer %}
@@ -28,6 +28,24 @@
                 </div>
             </section>
         </div>
+        <section class="section-block card card-full youtube-card">
+            <h2 class="card-title">Neuestes YouTube-Video</h2>
+            <p class="card-text">Das aktuellste Video von <strong>@greenst0ne51</strong>.</p>
+            {% if latest_video %}
+            <div class="youtube-latest" data-youtube-video="{{ latest_video.id }}" data-video-title="{{ latest_video.title }}">
+                <div class="youtube-placeholder">
+                    <p><strong>{{ latest_video.title }}</strong></p>
+                    <button type="button" class="btn-action" data-load-youtube-video>Video laden</button>
+                    <a href="{{ latest_video.url }}" target="_blank" rel="noopener noreferrer" class="footer-link">Direkt auf YouTube ansehen</a>
+                </div>
+            </div>
+            {% else %}
+            <p class="card-text">Das aktuellste Video konnte gerade nicht automatisch geladen werden. Alle Uploads findest du auf dem Kanal.</p>
+            {% endif %}
+            <div class="card-actions">
+                <a href="https://www.youtube.com/@greenst0ne51/videos" class="btn-action" target="_blank" rel="noopener noreferrer">Alle Videos ansehen</a>
+            </div>
+        </section>
         <section class="section-block card card-full">
             <h2 class="card-title">OpenPGP Public Key</h2>
             <p class="card-text">Mit diesem öffentlichen Schlüssel kannst du Nachrichten an <a href="mailto:admin@greenstone51.de" class="mail-link">admin@greenstone51.de</a> verschlüsseln und Signaturen prüfen. Teile niemals deinen privaten Schlüssel.</p>
