@@ -1120,7 +1120,7 @@ button.btn-power:hover {
 }
 
 
-/* Homepage server cards, biography and transparency pages */
+/* Homepage server cards, game-server detail pages and biography */
 .server-card { min-height: 245px; }
 .server-card-content { display: flex; flex-direction: column; gap: 0.35rem; }
 .server-address {
@@ -1146,7 +1146,7 @@ button.btn-power:hover {
 .bio-grid { align-items: stretch; }
 .key-details { margin-top: 1.25rem; color: var(--text-secondary); }
 .key-details summary { cursor: pointer; color: var(--accent-red); font-weight: 600; }
-.pgp-key, .logging-commands {
+.pgp-key {
     margin-top: 0.8rem; padding: 1rem; max-width: 100%; overflow-x: auto;
     border: 1px solid var(--border-color); border-radius: 6px;
     background: rgba(0, 0, 0, 0.2); color: var(--text-primary);
@@ -1157,5 +1157,80 @@ button.btn-power:hover {
     .card-actions { flex-direction: column; }
     .card-actions > * { width: 100%; }
     .server-card { min-height: 0; }
-    .pgp-key, .logging-commands { font-size: 0.72rem; }
+    .pgp-key { font-size: 0.72rem; }
+}
+
+
+/* Dedicated game server and YouTube embed components */
+.server-meta {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    gap: 1rem;
+    margin-top: 1rem;
+}
+.server-meta-item {
+    padding: 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: rgba(255,255,255,0.02);
+}
+.server-meta-label {
+    display: block;
+    margin-bottom: 0.4rem;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+}
+.server-meta-value {
+    color: var(--text-primary);
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+.server-feature-list {
+    margin: 0.5rem 0 0 1.25rem;
+    color: var(--text-secondary);
+    line-height: 1.8;
+}
+.server-hero {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+.youtube-latest {
+    width: 100%;
+    max-width: 850px;
+    margin-top: 1rem;
+    aspect-ratio: 16 / 9;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+    background: #05080d;
+}
+.youtube-latest iframe {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border: 0;
+}
+.youtube-placeholder {
+    width: 100%;
+    height: 100%;
+    min-height: 220px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 0.9rem;
+    padding: 1.5rem;
+    text-align: center;
+}
+.youtube-placeholder p {
+    color: var(--text-secondary);
+    max-width: 34rem;
+}
+.youtube-placeholder .btn-action {
+    width: auto;
+}
+@media (max-width: 600px) {
+    .youtube-placeholder { padding: 1rem; }
 }
