@@ -6,7 +6,7 @@
     <meta name="description" content="Greenstone51 – Game-Server, Homeserver-Projekte und YouTube.">
     <title>Greenstone51 // Home</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-    <link rel="stylesheet" href="/static/style.css?v=21">
+    <link rel="stylesheet" href="/static/style.css?v=22">
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -18,9 +18,8 @@
     </script>
 </head>
 <body>
-    {% set active_page = 'home' %}
-    {% set page_label = '' %}
-    {% include 'partials/nav.html' %}
+    {% from 'partials/nav.html' import site_header, site_footer %}
+    {{ site_header('home', '') }}
     <main>
         <div class="page-header">
             <h1 class="page-title">Homeserver, ein Kaliber größer.</h1>
@@ -31,10 +30,14 @@
             <article class="card server-card">
                 <div class="server-card-content">
                     <h3 class="card-title">01 / Minecraft Bunker</h3>
-                    <p class="card-text">Eigener Minecraft-Server im ABC-Bunker-Theme – mit langer Geschichte.</p>
-                    <p class="server-address"><span>Serveradresse</span><code>mc.greenstone51.de:26951</code></p>
+                    <p class="card-text">Java- und Bedrock-Crossplay dank Geyser, Simple Voice Chat und eine Live-Karte mit BlueMap.</p>
+                    <p class="server-address"><span>Java</span><code>mc.greenstone51.de:26951</code></p>
+                    <p class="server-address"><span>Bedrock (Geyser)</span><code>mc.greenstone51.de:26952</code></p>
                 </div>
-                <div class="card-actions"><button type="button" class="btn-action" data-copy-address="mc.greenstone51.de:26951">Serveradresse kopieren</button></div>
+                <div class="card-actions">
+                    <a href="/minecraft" class="btn-action">Serverdetails</a>
+                    <button type="button" class="btn-action btn-outline" data-copy-address="mc.greenstone51.de:26951">Java-Adresse kopieren</button>
+                </div>
             </article>
             <article class="card server-card">
                 <div class="server-card-content">
@@ -42,29 +45,39 @@
                     <p class="card-text">Eigener Satisfactory Dedicated Server.</p>
                     <p class="server-address"><span>Serveradresse</span><code>satis.greenstone51.de:7777</code></p>
                 </div>
-                <div class="card-actions"><button type="button" class="btn-action" data-copy-address="satis.greenstone51.de:7777">Serveradresse kopieren</button></div>
+                <div class="card-actions">
+                    <a href="/satisfactory" class="btn-action">Serverdetails</a>
+                    <button type="button" class="btn-action btn-outline" data-copy-address="satis.greenstone51.de:7777">Adresse kopieren</button>
+                </div>
             </article>
             <article class="card server-card">
                 <div class="server-card-content">
                     <h3 class="card-title">03 / OpenLane – Assetto Corsa</h3>
-                    <p class="card-text">Eigener Assetto Corsa Server. Der Join-Link öffnet Content Manager, sofern die App installiert und als Protokollhandler registriert ist.</p>
+                    <p class="card-text">Freeroam-Server auf der Shutoko Revival Project (SRP) Map.</p>
                     <p class="server-address"><span>Serveradresse</span><code>ac.greenstone51.de:8081</code></p>
                 </div>
                 <div class="card-actions">
-                    <a href="acmanager://race/online/join?ip=ac.greenstone51.de&amp;httpPort=8081" class="btn-action">Mit Content Manager beitreten</a>
-                    <button type="button" class="btn-action btn-outline" data-copy-address="ac.greenstone51.de:8081">Adresse kopieren</button>
+                    <a href="/assetto-corsa" class="btn-action">Serverdetails</a>
+                    <a href="acmanager://race/online/join?ip=ac.greenstone51.de&amp;httpPort=8081" class="btn-action btn-outline">Mit Content Manager beitreten</a>
                 </div>
             </article>
         </div>
+
         <section class="section-block">
             <h2 class="section-title">Weitere Services</h2>
             <div class="grid">
                 <article class="card">
-                    <div class="server-card-content"><h3 class="card-title">04 / VPN51</h3><p class="card-text mb-15">Dashboard zum VPN-Dienst mit Live-Metriken und Zugangsdaten.</p></div>
+                    <div class="server-card-content">
+                        <h3 class="card-title">04 / VPN51</h3>
+                        <p class="card-text mb-15">Dashboard zum VPN-Dienst mit Live-Metriken und Zugangsdaten.</p>
+                    </div>
                     <div class="card-actions"><a href="/vpn51" class="btn-action">Dashboard öffnen</a></div>
                 </article>
                 <article class="card">
-                    <div class="server-card-content"><h3 class="card-title">05 / File Sharing</h3><p class="card-text mb-15">Dateien hochladen, als Vorschau ansehen und herunterladen.</p></div>
+                    <div class="server-card-content">
+                        <h3 class="card-title">05 / File Sharing</h3>
+                        <p class="card-text mb-15">Dateien hochladen, als Vorschau ansehen und herunterladen.</p>
+                    </div>
                     <div class="card-actions">
                         <a href="/upload" class="btn-action">Hochladen</a>
                         <a href="/download" class="btn-action btn-outline">Herunterladen</a>
@@ -72,10 +85,25 @@
                 </article>
             </div>
         </section>
+
         <section class="section-block">
             <h2 class="section-title">YouTube</h2>
             <div class="card card-full youtube-card">
-                <div><h3 class="card-title">@greenst0ne51</h3><p class="card-text">Auf meinem YouTube-Kanal findest du meine veröffentlichten Videos und weitere Inhalte. Über die Biografie-Seite gibt es außerdem die zentralen Kontakt- und Projektlinks.</p></div>
+                <div>
+                    <h3 class="card-title">@greenst0ne51</h3>
+                    <p class="card-text">Das aktuellste Video meines Kanals – automatisch über den YouTube-Kanal-Feed abgerufen.</p>
+                </div>
+                {% if latest_video %}
+                <div class="youtube-latest" data-youtube-video="{{ latest_video.id }}" data-video-title="{{ latest_video.title }}">
+                    <div class="youtube-placeholder">
+                        <p><strong>{{ latest_video.title }}</strong></p>
+                        <button type="button" class="btn-action" data-load-youtube-video>Video laden</button>
+                        <a href="{{ latest_video.url }}" target="_blank" rel="noopener noreferrer" class="footer-link">Direkt auf YouTube ansehen</a>
+                    </div>
+                </div>
+                {% else %}
+                <p class="card-text">Das neueste Video konnte gerade nicht automatisch abgerufen werden. Du findest alle Uploads direkt auf dem Kanal.</p>
+                {% endif %}
                 <div class="card-actions">
                     <a href="https://www.youtube.com/@greenst0ne51" class="btn-action" target="_blank" rel="noopener noreferrer">YouTube-Kanal öffnen</a>
                     <a href="https://www.youtube.com/@greenst0ne51/videos" class="btn-action btn-outline" target="_blank" rel="noopener noreferrer">Alle Videos ansehen</a>
@@ -83,13 +111,6 @@
             </div>
         </section>
     </main>
-    <footer>
-        &copy; 2026 Greenstone51. All rights reserved. |
-        <a href="/tos" class="footer-link">ToS</a> |
-        <a href="/datenschutz" class="footer-link">Datenschutz</a> |
-        <a href="/impressum" class="footer-link">Impressum</a> |
-        <a href="/bio" class="footer-link">Biografie</a> |
-        <a href="/logging" class="footer-link">Logging</a>
-    </footer>
+    {{ site_footer() }}
 </body>
 </html>
