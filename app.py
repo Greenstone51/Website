@@ -49,144 +49,256 @@ VAPID_CLAIM_EMAIL = os.getenv("VAPID_CLAIM_EMAIL", "mailto:admin@greenstone51.de
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Latest public upload from the channel handle. Cache briefly to avoid
-# requesting YouTube on every homepage view; no API key is required.
-YOUTUBE_CHANNEL_URL = "https://www.youtube.com/@greenst0ne51"
+# Latest public upload from the channel handle. The public Atom feed does not
+# require a YouTube Data API key. The feed endpoint (/feeds/) is distinct from
+# the WebSub notification topic path (/xml/feeds/).
+YOUTUBE_CHANNEL_URL = os.getenv(
+    "YOUTUBE_CHANNEL_URL", "https://www.youtube.com/@greenst0ne51"
+).strip().rstrip("/")
+YOUTUBE_FEED_URL = "https://www.youtube.com/feeds/videos.xml"
 YOUTUBE_CACHE_TTL = 900
 _YOUTUBE_CACHE = {"expires": 0.0, "video": None}
 _YOUTUBE_CACHE_LOCK = threading.Lock()
 
 
+def _extract_youtube_channel_id(page_html):
+    """Extract the stable UC channel ID from YouTube's public channel HTML."""
+    patterns = (
+        r'feeds/videos\.xml\?channel_id=(UC[A-Za-z0-9_-]{22})',
+        r'["\'](?:channelId|externalId|browseId|channel_id)["\']\s*:\s*["\'](UC[A-Za-z0-9_-]{22})["\']',
+        r'/channel/(UC[A-Za-z0-9_-]{22})',
+        r'data-channel-external-id=["\'](UC[A-Za-z0-9_-]{22})["\']',
+        r'<meta\b(?=[^>]*\bitemprop=["\']channelId["\'])(?=[^>]*\bcontent=["\'](UC[A-Za-z0-9_-]{22})["\'])[^>]*>'
+    )
+    for pattern in patterns:
+        match = re.search(pattern, page_html, re.IGNORECASE)
+        if match:
+            return match.group(1)
+    return None
+
+
+def _video_from_youtube_renderer(renderer):
+    """Normalize the common video renderers used in YouTube channel pages."""
+    video_id = renderer.get("videoId", "")
+    if not isinstance(video_id, str) or not re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id):
+        return None
+
+    title_data = renderer.get("title") or renderer.get("headline") or {}
+    title = ""
+    if isinstance(title_data, dict):
+        title = title_data.get("simpleText", "")
+        if not title:
+            runs = title_data.get("runs", [])
+            if isinstance(runs, list):
+                title = "".join(
+                    item.get("text", "") for item in runs if isinstance(item, dict)
+                )
+
+    published_data = renderer.get("publishedTimeText") or renderer.get("publishedTime") or {}
+    published = (
+        published_data.get("simpleText", "")
+        if isinstance(published_data, dict)
+        else ""
+    )
+    return {
+        "id": video_id,
+        "title": title or "Neuestes Video",
+        "published": published,
+        "url": f"https://www.youtube.com/watch?v={video_id}"
+    }
+
+
 def _extract_latest_video_from_youtube_page(page_html):
     """Read the first upload from YouTube's server-rendered videos tab."""
+    marker_patterns = (
+        r"(?:var\s+)?ytInitialData\s*=\s*",
+        r'window\["ytInitialData"\]\s*=\s*',
+        r"window\['ytInitialData'\]\s*=\s*"
+    )
+    decoder = json.JSONDecoder()
     initial_data = None
-    markers = ("var ytInitialData = ", "ytInitialData = ", "ytInitialData=")
-    for marker in markers:
-        marker_index = page_html.find(marker)
-        if marker_index >= 0:
-            data_start = marker_index + len(marker)
+
+    for pattern in marker_patterns:
+        for marker in re.finditer(pattern, page_html):
             try:
-                initial_data, _ = json.JSONDecoder().raw_decode(page_html[data_start:])
+                initial_data, _ = decoder.raw_decode(page_html[marker.end():])
             except (json.JSONDecodeError, ValueError):
-                initial_data = None
-            if initial_data is not None:
+                continue
+            if isinstance(initial_data, (dict, list)):
                 break
+            initial_data = None
+        if initial_data is not None:
+            break
 
     if initial_data is None:
         return None
 
-    def walk(value):
+    # Iterative depth-first traversal avoids recursion-depth failures on large pages.
+    pending = [initial_data]
+    renderer_keys = (
+        "videoRenderer",
+        "gridVideoRenderer",
+        "compactVideoRenderer",
+        "reelItemRenderer"
+    )
+    while pending:
+        value = pending.pop()
         if isinstance(value, dict):
-            renderer = value.get("videoRenderer")
-            if isinstance(renderer, dict):
-                video_id = renderer.get("videoId", "")
-                title_data = renderer.get("title", {})
-                title = title_data.get("simpleText", "") if isinstance(title_data, dict) else ""
-                if not title and isinstance(title_data, dict):
-                    runs = title_data.get("runs", [])
-                    if runs and isinstance(runs[0], dict):
-                        title = runs[0].get("text", "")
-                if re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id):
-                    published_data = renderer.get("publishedTimeText", {})
-                    return {
-                        "id": video_id,
-                        "title": title or "Neuestes Video",
-                        "published": published_data.get("simpleText", "") if isinstance(published_data, dict) else "",
-                        "url": f"https://www.youtube.com/watch?v={video_id}"
-                    }
-            for child in value.values():
-                result = walk(child)
-                if result:
-                    return result
+            for key in renderer_keys:
+                renderer = value.get(key)
+                if isinstance(renderer, dict):
+                    video = _video_from_youtube_renderer(renderer)
+                    if video:
+                        return video
+            pending.extend(reversed(list(value.values())))
         elif isinstance(value, list):
-            for child in value:
-                result = walk(child)
-                if result:
-                    return result
+            pending.extend(reversed(value))
+    return None
+
+
+def _extract_latest_video_from_youtube_feed(feed_content):
+    """Parse the newest entry in YouTube's public Atom feed."""
+    root = ET.fromstring(feed_content)
+    entry = next(
+        (node for node in list(root) if node.tag.rsplit("}", 1)[-1] == "entry"),
+        None
+    )
+    if entry is None:
         return None
 
-    return walk(initial_data)
+    def child_text(local_name):
+        for child in list(entry):
+            if child.tag.rsplit("}", 1)[-1] == local_name:
+                return (child.text or "").strip()
+        return ""
+
+    video_id = child_text("videoId")
+    if not re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id):
+        entry_id = child_text("id")
+        match = re.search(r"video:([A-Za-z0-9_-]{11})", entry_id)
+        if not match:
+            for child in list(entry):
+                if child.tag.rsplit("}", 1)[-1] == "link":
+                    match = re.search(r"[?&]v=([A-Za-z0-9_-]{11})", child.attrib.get("href", ""))
+                    if match:
+                        break
+        video_id = match.group(1) if match else ""
+
+    if not re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id):
+        return None
+
+    return {
+        "id": video_id,
+        "title": child_text("title") or "Neuestes Video",
+        "published": child_text("published") or child_text("updated"),
+        "url": f"https://www.youtube.com/watch?v={video_id}"
+    }
 
 
 def get_latest_youtube_video():
-    """Fetch the latest public channel upload, with an in-page fallback."""
+    """Fetch the latest public upload, with HTML fallback and visible diagnostics."""
     now = time.monotonic()
     with _YOUTUBE_CACHE_LOCK:
         if now < _YOUTUBE_CACHE["expires"]:
             return _YOUTUBE_CACHE["video"]
 
         video = None
+        page_video = None
         page_response = None
+        channel_id = os.getenv("YOUTUBE_CHANNEL_ID", "").strip()
+
+        page_headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+            ),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9,de;q=0.8"
+        }
+        feed_headers = {
+            "User-Agent": "Mozilla/5.0 (compatible; Greenstone51Website/1.0)",
+            "Accept": "application/atom+xml,application/xml;q=0.9,*/*;q=0.8"
+        }
+
         try:
-            channel_id = os.getenv("YOUTUBE_CHANNEL_ID", "").strip()
-            try:
-                page_response = requests.get(
+            # An explicit ID skips HTML scraping entirely. Otherwise resolve the
+            # immutable channel ID from both the Videos tab and the channel page.
+            if not channel_id:
+                page_urls = (
                     YOUTUBE_CHANNEL_URL + "/videos",
-                    headers={
-                        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-                                      "(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-                        "Accept-Language": "en-US,en;q=0.9"
-                    },
-                    timeout=(3, 8)
+                    YOUTUBE_CHANNEL_URL
                 )
-                page_response.raise_for_status()
-            except requests.RequestException:
-                page_response = None
+                for page_url in page_urls:
+                    try:
+                        response = requests.get(
+                            page_url,
+                            headers=page_headers,
+                            timeout=(5, 10)
+                        )
+                        response.raise_for_status()
+                        page_response = response
+                        channel_id = _extract_youtube_channel_id(response.text) or ""
+                        page_video = _extract_latest_video_from_youtube_page(response.text)
+                        if channel_id or page_video:
+                            break
+                    except requests.RequestException as error:
+                        app.logger.warning(
+                            "YouTube channel page request failed (%s): %s",
+                            page_url,
+                            error
+                        )
 
-            if page_response is not None and not channel_id:
-                channel_patterns = (
-                    r'"channelId"\s*:\s*"(UC[A-Za-z0-9_-]{22})"',
-                    r'"externalId"\s*:\s*"(UC[A-Za-z0-9_-]{22})"',
-                    r'"browseId"\s*:\s*"(UC[A-Za-z0-9_-]{22})"',
-                    r'/channel/(UC[A-Za-z0-9_-]{22})',
-                    r'"channel_id"\s*:\s*"(UC[A-Za-z0-9_-]{22})"'
-                )
-                for pattern in channel_patterns:
-                    match = re.search(pattern, page_response.text)
-                    if match:
-                        channel_id = match.group(1)
-                        break
-
-            # YouTube's current XML feed path uses /xml/feeds/, not /feeds/.
+            # This is the endpoint that returns Atom video entries. The /xml/feeds/
+            # path is used as the WebSub topic URL, not as the feed-fetch URL.
             if channel_id:
                 try:
                     feed_response = requests.get(
-                        "https://www.youtube.com/xml/feeds/videos.xml",
+                        YOUTUBE_FEED_URL,
                         params={"channel_id": channel_id},
-                        headers={"User-Agent": "Mozilla/5.0 (compatible; Greenstone51Website/1.0)"},
-                        timeout=(3, 8)
+                        headers=feed_headers,
+                        timeout=(5, 10)
                     )
                     feed_response.raise_for_status()
-                    root = ET.fromstring(feed_response.content)
-                    namespaces = {
-                        "atom": "http://www.w3.org/2005/Atom",
-                        "yt": "http://www.youtube.com/xml/schemas/2015"
-                    }
-                    entry = root.find("atom:entry", namespaces)
-                    if entry is not None:
-                        video_id = entry.findtext("yt:videoId", default="", namespaces=namespaces)
-                        title = entry.findtext("atom:title", default="Neuestes Video", namespaces=namespaces)
-                        published = entry.findtext("atom:published", default="", namespaces=namespaces)
-                        if re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id):
-                            video = {
-                                "id": video_id,
-                                "title": title,
-                                "published": published,
-                                "url": f"https://www.youtube.com/watch?v={video_id}"
-                            }
-                except (requests.RequestException, ET.ParseError, ValueError, TypeError):
-                    video = None
+                    video = _extract_latest_video_from_youtube_feed(feed_response.content)
+                    if video is None:
+                        app.logger.warning(
+                            "YouTube feed returned no valid video entries for channel %s (HTTP %s).",
+                            channel_id,
+                            feed_response.status_code
+                        )
+                except (requests.RequestException, ET.ParseError, ValueError, TypeError) as error:
+                    app.logger.warning(
+                        "YouTube Atom feed request or parsing failed for channel %s: %s",
+                        channel_id,
+                        error
+                    )
+            else:
+                app.logger.warning(
+                    "Could not resolve the YouTube channel ID from %s. "
+                    "Set YOUTUBE_CHANNEL_ID in the service environment as a stable override.",
+                    YOUTUBE_CHANNEL_URL
+                )
 
-            # If the XML feed is unavailable, parse YouTube's videos tab itself.
+            # HTML parsing is the fallback for feed outages or channels for which
+            # YouTube has temporarily stopped returning Atom entries.
+            if video is None:
+                video = page_video
             if video is None and page_response is not None:
                 video = _extract_latest_video_from_youtube_page(page_response.text)
+                if video is None:
+                    app.logger.warning(
+                        "YouTube channel HTML was reachable but contained no recognized latest-video data (HTTP %s, URL %s).",
+                        page_response.status_code,
+                        page_response.url
+                    )
 
         except Exception:
-            # The homepage and biography must remain available during outages.
+            # A YouTube outage must never prevent the website itself from loading.
+            app.logger.exception("Unexpected error while resolving the latest YouTube upload.")
             video = None
 
         _YOUTUBE_CACHE["video"] = video
-        _YOUTUBE_CACHE["expires"] = now + (YOUTUBE_CACHE_TTL if video else 180)
+        _YOUTUBE_CACHE["expires"] = now + (YOUTUBE_CACHE_TTL if video else 120)
         return video
 
 UPLOAD_FOLDER = os.path.abspath(os.path.join(BASE_DIR, 'uploads'))
