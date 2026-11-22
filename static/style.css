@@ -1118,3 +1118,44 @@ button.btn-power:hover {
         max-height: 70vh;
     }
 }
+
+
+/* Homepage server cards, biography and transparency pages */
+.server-card { min-height: 245px; }
+.server-card-content { display: flex; flex-direction: column; gap: 0.35rem; }
+.server-address {
+    display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.7rem;
+    color: var(--text-secondary); font-size: 0.85rem;
+}
+.server-address code {
+    display: inline-block; width: fit-content; max-width: 100%; padding: 0.35rem 0.55rem;
+    border: 1px solid var(--border-color); border-radius: 5px;
+    background: rgba(0, 0, 0, 0.18); color: var(--text-primary); overflow-wrap: anywhere;
+}
+.card-actions {
+    display: flex; align-items: stretch; gap: 0.6rem; width: 100%;
+    margin-top: auto; padding-top: 1.25rem;
+}
+.card-actions > * { flex: 1 1 0; min-width: 0; text-align: center; }
+.card-actions .btn-action {
+    display: flex; justify-content: center; align-items: center; width: 100%;
+}
+.card-actions .btn-outline { background: transparent; }
+.section-block { width: 100%; margin-top: 2.5rem; }
+.youtube-card { gap: 0.5rem; }
+.bio-grid { align-items: stretch; }
+.key-details { margin-top: 1.25rem; color: var(--text-secondary); }
+.key-details summary { cursor: pointer; color: var(--accent-red); font-weight: 600; }
+.pgp-key, .logging-commands {
+    margin-top: 0.8rem; padding: 1rem; max-width: 100%; overflow-x: auto;
+    border: 1px solid var(--border-color); border-radius: 6px;
+    background: rgba(0, 0, 0, 0.2); color: var(--text-primary);
+    font: 0.82rem/1.55 "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    white-space: pre;
+}
+@media (max-width: 600px) {
+    .card-actions { flex-direction: column; }
+    .card-actions > * { width: 100%; }
+    .server-card { min-height: 0; }
+    .pgp-key, .logging-commands { font-size: 0.72rem; }
+}
