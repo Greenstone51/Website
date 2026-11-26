@@ -20,7 +20,7 @@ mmag_bp = Blueprint("mmag", __name__)
 # Replace this value with the scrypt hash generated for the MMAG password.
 # Keep the hash here (not the plaintext password) so the temporary feature is
 # self-contained and can be removed by deleting mmag.py and mmag.html.
-MMAG_PASSWORD_HASH = "scrypt:32768:8:1$REPLACE_WITH_SALT$REPLACE_WITH_HASH"
+MMAG_PASSWORD_HASH = "scrypt:32768:8:1$492vAuClA6HIQava$1825b07a42333eaab67359337cdd7612491d8b5c374d0bc50d3e88023716d470e0d9952e6c6868528bd10904036026f22d711ed86365d9fc82ded5ac81885572"
 
 MMAG_UPLOAD_FOLDER = os.path.abspath(os.path.join(BASE_DIR, "MMAG_uploads"))
 os.makedirs(MMAG_UPLOAD_FOLDER, mode=0o700, exist_ok=True)
