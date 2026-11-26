@@ -3,6 +3,7 @@
 Large uploads are sent in resumable chunks. The server then assembles all files
 into a private, uncompressed ZIP64 archive in a background thread.
 """
+import fcntl
 import json
 import logging
 import os
@@ -11,6 +12,7 @@ import shutil
 import threading
 import uuid
 import zipfile
+from contextlib import contextmanager
 
 from flask import (
     Blueprint,
@@ -114,6 +116,58 @@ def _load_upload_metadata(upload_id):
     if not isinstance(metadata, dict) or not isinstance(metadata.get("files"), list):
         abort(404)
     return metadata
+
+
+@contextmanager
+def _upload_lock(upload_id):
+    """Serialize state-changing operations for one upload across processes."""
+    staging_dir = _staging_path(upload_id)
+    if not os.path.isdir(staging_dir):
+        abort(404)
+
+    lock_path = os.path.join(staging_dir, ".upload.lock")
+    lock_fd = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        yield staging_dir
+    finally:
+        try:
+            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        finally:
+            os.close(lock_fd)
+
+
+def _upload_cancel_requested(upload_id):
+    return os.path.exists(os.path.join(_staging_path(upload_id), ".cancel_requested"))
+
+
+def _remove_upload_payload(staging_dir):
+    """Remove all upload data while retaining only the tiny status and lock files."""
+    for entry in os.listdir(staging_dir):
+        if entry in {"status.json", ".upload.lock"}:
+            continue
+        path = os.path.join(staging_dir, entry)
+        try:
+            if os.path.isdir(path) and not os.path.islink(path):
+                shutil.rmtree(path)
+            else:
+                os.remove(path)
+        except FileNotFoundError:
+            pass
+
+
+def _mark_upload_cancelled(upload_id, message="Upload abgebrochen. Temporäre Daten wurden gelöscht."):
+    staging_dir = _staging_path(upload_id)
+    status_data = _load_json_file(_status_path(upload_id)) or {}
+    _remove_upload_payload(staging_dir)
+    _write_upload_status(
+        upload_id,
+        "cancelled",
+        0,
+        int(status_data.get("total_bytes", 0)),
+        int(status_data.get("file_count", 0)),
+        message,
+    )
 
 
 def _chunk_count(file_size):
