@@ -291,7 +291,7 @@
                 submitButton.disabled = true;
                 progressContainer.style.display = 'block';
                 progressText.classList.remove('hidden');
-                progressText.textContent = 'Vorhandener Upload wird gesucht …';
+                progressText.textContent = 'Upload wird vorbereitet …';
 
                 try {
                     const response = await fetch(
@@ -303,6 +303,16 @@
                             headers: {'X-Requested-With': 'XMLHttpRequest'}
                         }
                     );
+
+                    if (response.status === 404) {
+                        pendingResume = null;
+                        clearResumeState();
+                        showStatus(
+                            'Der vorherige Upload ist nicht mehr verfügbar. Du kannst einen neuen Upload starten.',
+                            false
+                        );
+                        return;
+                    }
 
                     const state = await response.json();
                     if (!response.ok || !state.success) {
@@ -337,15 +347,15 @@
                     acknowledgedBytes = Number(state.received_bytes) || 0;
                     saveResumeState();
 
-                    progressText.textContent = 'Vorheriger Upload wiederhergestellt.';
-                    updateProgress(acknowledgedBytes, 'Bereits übertragene Daten');
+                    progressText.textContent = 'Upload bereit.';
+                    updateProgress(acknowledgedBytes, 'Upload-Fortschritt');
                     showStatus(
                         'Upload wurde wiederhergestellt. Du kannst fortfahren oder neu beginnen.',
                         true
                     );
                 } catch (error) {
                     showStatus(error.message, false);
-                    progressText.textContent = 'Wiederherstellung nicht möglich.';
+                    progressText.textContent = 'Bitte starte einen neuen Upload.';
                 } finally {
                     resumeCheckInProgress = false;
                     updateSelection();
@@ -656,7 +666,7 @@
                     );
 
                     if (!response.ok) {
-                        throw new Error('Status der ZIP-Erstellung konnte nicht abgefragt werden (HTTP ' + response.status + ').');
+                        throw new Error('Der Upload-Status konnte nicht abgefragt werden.');
                     }
 
                     const state = await response.json();
@@ -673,7 +683,7 @@
                     }
 
                     if (state.state === 'failed') {
-                        throw new Error(state.message || 'ZIP-Erstellung fehlgeschlagen.');
+                        throw new Error('Die Dateien konnten nicht fertiggestellt werden.');
                     }
 
                     if (state.state === 'processing') {
