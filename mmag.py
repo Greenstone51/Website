@@ -287,7 +287,7 @@ def _finalize_upload_worker(upload_id):
                 total_bytes,
                 total_bytes,
                 file_count,
-                f"{file_count} Datei(en) erfolgreich in einem unkomprimierten ZIP-Archiv gespeichert.",
+                "Dateien erfolgreich hochgeladen.",
             )
             for file_index in range(file_count):
                 shutil.rmtree(
@@ -385,7 +385,7 @@ def _finalize_upload_worker(upload_id):
                 total_bytes,
                 total_bytes,
                 file_count,
-                f"{file_count} Datei(en) erfolgreich in einem unkomprimierten ZIP-Archiv gespeichert.",
+                "Dateien erfolgreich hochgeladen.",
             )
 
         # Source chunks are no longer required once the complete archive exists.
