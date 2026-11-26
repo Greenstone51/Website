@@ -7,3 +7,4 @@ __pycache__/
 venv/
 push_subscriptions.json
 private_key.pem
+.flask_secret_key
