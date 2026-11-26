@@ -612,10 +612,11 @@ def mmag_chunk_finish(upload_id):
     if auth_error:
         return auth_error
 
-    metadata = _load_upload_metadata(upload_id)
     status_path = _status_path(upload_id)
     status_data = _load_json_file(status_path) or {}
 
+    # The completed worker removes upload metadata and temporary chunks. Check
+    # completion first so a repeated finish request remains idempotent.
     if status_data.get("state") == "completed":
         return jsonify(
             {
@@ -625,6 +626,7 @@ def mmag_chunk_finish(upload_id):
             }
         )
 
+    metadata = _load_upload_metadata(upload_id)
     if not _validate_upload_chunks(upload_id, metadata):
         return _json_error(
             "Die Übertragung ist noch nicht vollständig. Fehlende Datenblöcke werden erneut benötigt.",
