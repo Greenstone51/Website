@@ -118,6 +118,7 @@
 
             const endpointBase = form.action.replace(/\/$/, '');
             const MAX_CHUNK_RETRIES = 3;
+            const RESUME_STORAGE_KEY = 'greenstone51_mmag_upload_resume';
             let selectedFiles = [];
             let uploadInProgress = false;
             let uploadSessionId = null;
@@ -126,6 +127,8 @@
             let nextChunkIndex = 0;
             let acknowledgedBytes = 0;
             let totalBytes = 0;
+            let pendingResume = null;
+            let resumeCheckInProgress = false;
 
             function formatBytes(bytes) {
                 if (bytes === 0) return '0 Bytes';
@@ -181,18 +184,19 @@
                 }).join('');
 
                 const selectionLocked = Boolean(uploadSessionId) || uploadInProgress;
-                nameInput.disabled = selectionLocked;
+                nameInput.disabled = selectionLocked || Boolean(pendingResume);
                 addFilesButton.disabled = selectionLocked;
                 dropZone.setAttribute('aria-disabled', selectionLocked ? 'true' : 'false');
                 submitButton.disabled = (
                     selectedFiles.length === 0 ||
                     !nameInput.value.trim() ||
+                    (Boolean(pendingResume) && !uploadSessionId) ||
                     uploadInProgress
                 );
 
                 submitButton.textContent = uploadSessionId && !uploadInProgress
                     ? 'Upload fortsetzen'
-                    : 'Upload starten';
+                    : (pendingResume ? 'Dateien zum Fortsetzen auswählen' : 'Upload starten');
             }
 
             function addSelectedFiles(fileList) {
@@ -209,6 +213,7 @@
 
                 fileInput.value = '';
                 updateSelection();
+                if (pendingResume) restoreUploadAfterReload();
             }
 
             function openFilePicker() {
@@ -217,6 +222,160 @@
 
             function delay(milliseconds) {
                 return new Promise(resolve => setTimeout(resolve, milliseconds));
+            }
+
+            function saveResumeState() {
+                if (!uploadSessionId) return;
+                try {
+                    sessionStorage.setItem(RESUME_STORAGE_KEY, JSON.stringify({
+                        upload_id: uploadSessionId,
+                        name: nameInput.value.trim(),
+                        files: selectedFiles.map(file => ({
+                            name: file.name,
+                            size: file.size,
+                            lastModified: file.lastModified
+                        }))
+                    }));
+                } catch (error) {
+                    console.warn('MMAG upload state could not be saved for reload recovery.');
+                }
+            }
+
+            function clearResumeState() {
+                try {
+                    sessionStorage.removeItem(RESUME_STORAGE_KEY);
+                } catch (error) {
+                    // Session storage may be disabled by the browser.
+                }
+            }
+
+            function orderFilesLikeSavedSelection(savedFiles) {
+                if (selectedFiles.length !== savedFiles.length) return null;
+
+                const remaining = selectedFiles.slice();
+                const ordered = [];
+
+                for (const savedFile of savedFiles) {
+                    const index = remaining.findIndex(file =>
+                        file.name === savedFile.name &&
+                        file.size === savedFile.size &&
+                        file.lastModified === savedFile.lastModified
+                    );
+                    if (index < 0) return null;
+                    ordered.push(remaining.splice(index, 1)[0]);
+                }
+
+                return ordered;
+            }
+
+            async function restoreUploadAfterReload() {
+                if (!pendingResume || resumeCheckInProgress) return;
+                if (selectedFiles.length < pendingResume.files.length) return;
+                if (selectedFiles.length > pendingResume.files.length) {
+                    showStatus(
+                        'Es wurden mehr Dateien ausgewählt als zum unterbrochenen Upload gehören. Entferne die zusätzlichen Dateien.',
+                        false
+                    );
+                    return;
+                }
+
+                const orderedFiles = orderFilesLikeSavedSelection(pendingResume.files);
+                if (!orderedFiles) {
+                    showStatus(
+                        'Die ausgewählten Dateien stimmen nicht mit dem unterbrochenen Upload überein. Wähle dieselben Dateien erneut aus.',
+                        false
+                    );
+                    return;
+                }
+
+                resumeCheckInProgress = true;
+                submitButton.disabled = true;
+                progressContainer.style.display = 'block';
+                progressText.classList.remove('hidden');
+                progressText.textContent = 'Vorhandenen Upload wird gesucht …';
+
+                try {
+                    const response = await fetch(
+                        endpointBase + '/chunk/' + pendingResume.upload_id + '/status?resume=1',
+                        {
+                            method: 'GET',
+                            credentials: 'same-origin',
+                            cache: 'no-store',
+                            headers: {'X-Requested-With': 'XMLHttpRequest'}
+                        }
+                    );
+
+                    const state = await response.json();
+                    if (!response.ok || !state.success) {
+                        throw new Error(state.message || 'Der vorherige Upload konnte nicht wiederhergestellt werden.');
+                    }
+
+                    if (state.state === 'completed') {
+                        showStatus(
+                            state.message || 'Der vorherige Upload wurde bereits vollständig abgeschlossen.',
+                            true
+                        );
+                        selectedFiles = [];
+                        pendingResume = null;
+                        nameInput.value = '';
+                        clearResumeState();
+                        progressText.textContent = 'Upload bereits abgeschlossen.';
+                        updateProgress(Number(state.total_bytes) || 0, 'ZIP-Erstellung abgeschlossen');
+                        return;
+                    }
+
+                    if (!['uploading', 'processing', 'failed'].includes(state.state)) {
+                        throw new Error('Der vorherige Upload befindet sich in einem unbekannten Zustand.');
+                    }
+
+                    selectedFiles = orderedFiles;
+                    uploadSessionId = pendingResume.upload_id;
+                    pendingResume = null;
+                    chunkSize = Number(state.chunk_size) || chunkSize;
+                    totalBytes = Number(state.total_bytes) || 0;
+                    nextFileIndex = Number(state.next_file_index) || 0;
+                    nextChunkIndex = Number(state.next_chunk_index) || 0;
+                    acknowledgedBytes = Number(state.received_bytes) || 0;
+                    saveResumeState();
+
+                    progressText.textContent = 'Vorheriger Upload wiederhergestellt.';
+                    updateProgress(acknowledgedBytes, 'Bereits übertragene Daten');
+                    showStatus(
+                        'Vorheriger Upload wiederhergestellt. Bereits übertragene Blöcke werden übersprungen.',
+                        true
+                    );
+                } catch (error) {
+                    showStatus(error.message, false);
+                    progressText.textContent = 'Wiederherstellung nicht möglich.';
+                } finally {
+                    resumeCheckInProgress = false;
+                    updateSelection();
+                }
+            }
+
+            function loadPendingResume() {
+                try {
+                    const saved = sessionStorage.getItem(RESUME_STORAGE_KEY);
+                    if (!saved) return;
+
+                    const parsed = JSON.parse(saved);
+                    if (
+                        parsed &&
+                        /^[a-f0-9]{32}$/.test(parsed.upload_id || '') &&
+                        typeof parsed.name === 'string' &&
+                        Array.isArray(parsed.files) &&
+                        parsed.files.length > 0
+                    ) {
+                        pendingResume = parsed;
+                        nameInput.value = parsed.name;
+                        showStatus(
+                            'Ein unterbrochener Upload wurde gefunden. Wähle erneut dieselben Dateien aus, um ihn fortzusetzen.',
+                            true
+                        );
+                    }
+                } catch (error) {
+                    clearResumeState();
+                }
             }
 
             async function postJson(url, payload) {
@@ -258,6 +417,7 @@
                 nextFileIndex = 0;
                 nextChunkIndex = 0;
                 acknowledgedBytes = 0;
+                saveResumeState();
                 updateSelection();
             }
 
@@ -521,6 +681,8 @@
 
                     selectedFiles = [];
                     uploadSessionId = null;
+                    pendingResume = null;
+                    clearResumeState();
                     nextFileIndex = 0;
                     nextChunkIndex = 0;
                     acknowledgedBytes = 0;
@@ -541,6 +703,7 @@
                 }
             });
 
+            loadPendingResume();
             updateSelection();
         })();
     </script>
