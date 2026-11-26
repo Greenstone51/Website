@@ -183,7 +183,7 @@
 
                 const selectionLocked = Boolean(uploadSessionId) || uploadInProgress || resumeCheckInProgress;
                 nameInput.disabled = selectionLocked || Boolean(pendingResume);
-                discardButton.classList.toggle('hidden', !(uploadSessionId || pendingResume) || uploadInProgress);
+                discardButton.classList.toggle('hidden', !(uploadSessionId || pendingResume) || uploadInProgress || resumeCheckInProgress);
                 addFilesButton.disabled = selectionLocked;
                 dropZone.setAttribute('aria-disabled', selectionLocked ? 'true' : 'false');
                 submitButton.disabled = (
@@ -641,7 +641,7 @@
 
                 progressBar.style.width = '0%';
                 progressContainer.setAttribute('aria-valuenow', '0');
-                progressText.textContent = 'Dateien werden fertiggestellt …';
+                progressText.textContent = 'Upload wird abgeschlossen …';
 
                 while (true) {
                     await delay(2000);
@@ -668,7 +668,7 @@
                     const total = Number(state.total_bytes) || 0;
 
                     if (state.state === 'completed') {
-                        updateProgress(total, 'ZIP-Erstellung abgeschlossen');
+                        updateProgress(total, 'Upload abgeschlossen');
                         return state;
                     }
 
@@ -677,9 +677,9 @@
                     }
 
                     if (state.state === 'processing') {
-                        updateProgress(completed, 'ZIP-Erstellung auf dem Server');
+                        updateProgress(completed, 'Dateien werden fertiggestellt');
                     } else {
-                        progressText.textContent = 'Warte auf den Server …';
+                        progressText.textContent = 'Upload wird verarbeitet …';
                     }
                 }
             }
@@ -762,7 +762,7 @@
                     const result = await finalizeAndWait();
 
                     showStatus(
-                        result.message || 'Upload und ZIP-Erstellung erfolgreich abgeschlossen.',
+                        result.message || 'Dateien erfolgreich hochgeladen.',
                         true
                     );
 
