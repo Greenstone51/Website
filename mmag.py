@@ -3,6 +3,7 @@
 Uploaded files are stored outside the static directory. The blueprint exposes
 no file listing, preview, or download endpoint.
 """
+import logging
 import os
 import shutil
 import uuid
@@ -33,7 +34,7 @@ os.makedirs(MMAG_UPLOAD_FOLDER, mode=0o700, exist_ok=True)
 try:
     os.chmod(MMAG_UPLOAD_FOLDER, 0o700)
 except OSError:
-    current_app.logger.warning("Could not enforce private permissions on MMAG_uploads.")
+    logging.getLogger(__name__).warning("Could not enforce private permissions on MMAG_uploads.")
 
 
 def _is_xhr_request():
