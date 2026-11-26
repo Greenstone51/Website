@@ -86,7 +86,7 @@ def _create_uncompressed_archive(file_storages, name_prefix):
         try:
             archive_fd = os.open(
                 archive_path,
-                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                os.O_RDWR | os.O_CREAT | os.O_EXCL,
                 0o600,
             )
             break
