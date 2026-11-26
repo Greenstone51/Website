@@ -1,12 +1,13 @@
 """Temporary, password-protected MMAG upload endpoint.
 
-Uploaded files are stored outside the static directory. The blueprint exposes
-no file listing, preview, or download endpoint.
+Uploaded batches are stored as uncompressed ZIP archives outside the static
+directory. The blueprint exposes no file listing, preview, or download route.
 """
 import logging
 import os
 import shutil
 import uuid
+import zipfile
 
 from flask import (
     Blueprint,
@@ -52,47 +53,84 @@ def _upload_error(message, status_code):
     ), status_code
 
 
-def _save_without_overwriting(file_storage, original_name, name_prefix):
-    """Save a prefixed file with private permissions without overwriting another."""
+def _unique_member_name(original_name, name_prefix, used_names):
+    """Build a safe prefixed ZIP member name and avoid duplicate member paths."""
     safe_filename = secure_filename(original_name) or "upload"
+    stem, extension = os.path.splitext(safe_filename)
+    base_name = f"{name_prefix}_{safe_filename}"
+    candidate = base_name
+    suffix = 2
+
+    while candidate.casefold() in used_names:
+        candidate = f"{name_prefix}_{stem}_{suffix}{extension}"
+        suffix += 1
+
+    used_names.add(candidate.casefold())
+    return candidate
+
+
+def _create_uncompressed_archive(file_storages, name_prefix):
+    """Store one upload batch in a private ZIP archive without recompressing data."""
     safe_prefix = secure_filename(name_prefix).strip("._-")[:64].rstrip("._-")
     if not safe_prefix:
         raise ValueError("A valid name prefix is required.")
 
-    stem, extension = os.path.splitext(safe_filename)
-    prefixed_name = f"{safe_prefix}_{safe_filename}"
-
-    # O_EXCL makes filename allocation atomic, including concurrent uploads.
+    archive_stem = f"{safe_prefix}_upload"
     for attempt in range(100):
         if attempt == 0:
-            candidate = prefixed_name
+            archive_name = f"{archive_stem}.zip"
         else:
-            candidate = f"{safe_prefix}_{stem}_{uuid.uuid4().hex[:10]}{extension}"
+            archive_name = f"{archive_stem}_{uuid.uuid4().hex[:10]}.zip"
 
-        path = os.path.join(MMAG_UPLOAD_FOLDER, candidate)
+        archive_path = os.path.join(MMAG_UPLOAD_FOLDER, archive_name)
         try:
-            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            archive_fd = os.open(
+                archive_path,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o600,
+            )
             break
         except FileExistsError:
             continue
     else:
-        raise OSError("Could not allocate a unique filename.")
+        raise OSError("Could not allocate a unique archive filename.")
 
     try:
-        with os.fdopen(fd, "wb") as destination:
-            file_storage.stream.seek(0)
-            shutil.copyfileobj(file_storage.stream, destination)
-            destination.flush()
-            os.fsync(destination.fileno())
-        os.chmod(path, 0o600)
+        with os.fdopen(archive_fd, "w+b") as archive_file:
+            with zipfile.ZipFile(
+                archive_file,
+                mode="w",
+                compression=zipfile.ZIP_STORED,
+                allowZip64=True,
+            ) as archive:
+                used_names = set()
+                for item in file_storages:
+                    member_name = _unique_member_name(
+                        item.filename,
+                        safe_prefix,
+                        used_names,
+                    )
+                    member_info = zipfile.ZipInfo(member_name)
+                    member_info.compress_type = zipfile.ZIP_STORED
+                    member_info.external_attr = 0o600 << 16
+
+                    # Stream data in chunks; do not load large videos/photos into RAM.
+                    with archive.open(member_info, mode="w", force_zip64=True) as destination:
+                        item.stream.seek(0)
+                        shutil.copyfileobj(item.stream, destination, length=1024 * 1024)
+
+            archive_file.flush()
+            os.fsync(archive_file.fileno())
+
+        os.chmod(archive_path, 0o600)
     except Exception:
         try:
-            os.remove(path)
+            os.remove(archive_path)
         except OSError:
             pass
         raise
 
-    return candidate
+    return archive_name
 
 
 # Flask routes are case-sensitive, so register both spellings explicitly.
@@ -137,17 +175,22 @@ def mmag_upload():
             )
 
         try:
-            for item in files:
-                _save_without_overwriting(item, item.filename, name_prefix)
-        except (OSError, ValueError):
-            current_app.logger.exception("MMAG upload failed while saving files.")
+            archive_name = _create_uncompressed_archive(files, name_prefix)
+        except (OSError, ValueError, zipfile.BadZipFile):
+            current_app.logger.exception("MMAG upload failed while creating ZIP archive.")
             return _upload_error(
-                "Mindestens eine Datei konnte nicht gespeichert werden.",
+                "Das ZIP-Archiv konnte nicht erstellt werden. Bitte prüfe die Dateien und versuche es erneut.",
                 500,
             )
 
-        current_app.logger.info("MMAG upload stored %d file(s).", len(files))
-        message = f"{len(files)} Datei(en) erfolgreich hochgeladen."
+        current_app.logger.info(
+            "MMAG upload stored %d file(s) in an uncompressed ZIP archive.",
+            len(files),
+        )
+        message = (
+            f"{len(files)} Datei(en) erfolgreich hochgeladen und "
+            "ohne Komprimierung in einem ZIP-Archiv gespeichert."
+        )
 
         if _is_xhr_request():
             # Do not return stored filenames or directory contents to the visitor.
