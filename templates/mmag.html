@@ -171,7 +171,7 @@
 
                 fileListPreview.classList.toggle('hidden', selectedFiles.length === 0);
                 fileListPreview.innerHTML = selectedFiles.map((file, index) => {
-                    const removeDisabled = uploadSessionId || uploadInProgress ? ' disabled' : '';
+                    const removeDisabled = uploadSessionId || uploadInProgress || resumeCheckInProgress ? ' disabled' : '';
                     return '<div class="file-item">' +
                         '<div class="file-item-info">' +
                         '<span class="file-item-name-text">' + escapeHtml(file.name) + '</span>' +
@@ -183,7 +183,7 @@
                         '</div>';
                 }).join('');
 
-                const selectionLocked = Boolean(uploadSessionId) || uploadInProgress;
+                const selectionLocked = Boolean(uploadSessionId) || uploadInProgress || resumeCheckInProgress;
                 nameInput.disabled = selectionLocked || Boolean(pendingResume);
                 addFilesButton.disabled = selectionLocked;
                 dropZone.setAttribute('aria-disabled', selectionLocked ? 'true' : 'false');
@@ -200,7 +200,7 @@
             }
 
             function addSelectedFiles(fileList) {
-                if (uploadInProgress || uploadSessionId) return;
+                if (uploadInProgress || uploadSessionId || resumeCheckInProgress) return;
 
                 for (const file of Array.from(fileList || [])) {
                     const alreadyAdded = selectedFiles.some(existing =>
@@ -217,7 +217,7 @@
             }
 
             function openFilePicker() {
-                if (!uploadInProgress && !uploadSessionId) fileInput.click();
+                if (!uploadInProgress && !uploadSessionId && !resumeCheckInProgress) fileInput.click();
             }
 
             function delay(milliseconds) {
@@ -292,7 +292,7 @@
                 submitButton.disabled = true;
                 progressContainer.style.display = 'block';
                 progressText.classList.remove('hidden');
-                progressText.textContent = 'Vorhandenen Upload wird gesucht …';
+                progressText.textContent = 'Vorhandener Upload wird gesucht …';
 
                 try {
                     const response = await fetch(
@@ -614,7 +614,7 @@
 
             fileListPreview.addEventListener('click', event => {
                 const removeButton = event.target.closest('[data-remove-index]');
-                if (!removeButton || uploadInProgress || uploadSessionId) return;
+                if (!removeButton || uploadInProgress || uploadSessionId || resumeCheckInProgress) return;
 
                 const index = Number(removeButton.dataset.removeIndex);
                 if (Number.isInteger(index) && index >= 0 && index < selectedFiles.length) {
@@ -626,7 +626,7 @@
             ['dragenter', 'dragover'].forEach(eventName => {
                 dropZone.addEventListener(eventName, event => {
                     event.preventDefault();
-                    if (!uploadInProgress && !uploadSessionId) {
+                    if (!uploadInProgress && !uploadSessionId && !resumeCheckInProgress) {
                         dropZone.classList.add('drag-over');
                     }
                 });
@@ -640,7 +640,7 @@
             });
 
             dropZone.addEventListener('drop', event => {
-                if (!uploadInProgress && !uploadSessionId && event.dataTransfer.files.length) {
+                if (!uploadInProgress && !uploadSessionId && !resumeCheckInProgress && event.dataTransfer.files.length) {
                     addSelectedFiles(event.dataTransfer.files);
                 }
             });
