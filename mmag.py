@@ -477,17 +477,40 @@ def _process_is_alive(pid):
 
 
 def _start_archive_finalization(upload_id):
-    """Use an exclusive marker so only one worker finalizes an upload."""
-    staging_dir = _staging_path(upload_id)
-    marker_path = os.path.join(staging_dir, ".finalizing")
+    """Start at most one archive worker for an upload, across threads/processes."""
+    try:
+        with _upload_lock(upload_id) as staging_dir:
+            status_data = _load_json_file(_status_path(upload_id)) or {}
+            state = status_data.get("state")
+            if state in {"completed", "cancelled", "failed", "uploading"}:
+                return False
+            if state not in {"processing", "cancelling"}:
+                return False
 
-    for _ in range(2):
-        try:
-            marker_fd = os.open(
-                marker_path,
-                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
-                0o600,
-            )
+            marker_path = os.path.join(staging_dir, ".finalizing")
+            try:
+                marker_fd = os.open(
+                    marker_path,
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                    0o600,
+                )
+            except FileExistsError:
+                try:
+                    with open(marker_path, "r", encoding="ascii") as marker:
+                        worker_pid = int(marker.read().strip())
+                except (OSError, ValueError):
+                    return False
+
+                if _process_is_alive(worker_pid):
+                    return False
+
+                os.remove(marker_path)
+                marker_fd = os.open(
+                    marker_path,
+                    os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                    0o600,
+                )
+
             try:
                 with os.fdopen(marker_fd, "w", encoding="ascii") as marker:
                     marker.write(str(os.getpid()))
@@ -499,23 +522,7 @@ def _start_archive_finalization(upload_id):
                 except OSError:
                     pass
                 raise
-            break
-        except FileExistsError:
-            try:
-                with open(marker_path, "r", encoding="ascii") as marker:
-                    worker_pid = int(marker.read().strip())
-            except (OSError, ValueError):
-                # A just-created marker may not have been fully written yet.
-                return False
-
-            if _process_is_alive(worker_pid):
-                return False
-
-            try:
-                os.remove(marker_path)
-            except OSError:
-                return False
-    else:
+    except FileNotFoundError:
         return False
 
     try:
@@ -529,7 +536,7 @@ def _start_archive_finalization(upload_id):
         return True
     except Exception:
         try:
-            os.remove(marker_path)
+            os.remove(os.path.join(_staging_path(upload_id), ".finalizing"))
         except OSError:
             pass
         raise
