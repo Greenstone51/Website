@@ -404,10 +404,17 @@ def _start_archive_finalization(upload_id):
                 os.O_WRONLY | os.O_CREAT | os.O_EXCL,
                 0o600,
             )
-            with os.fdopen(marker_fd, "w", encoding="ascii") as marker:
-                marker.write(str(os.getpid()))
-                marker.flush()
-                os.fsync(marker.fileno())
+            try:
+                with os.fdopen(marker_fd, "w", encoding="ascii") as marker:
+                    marker.write(str(os.getpid()))
+                    marker.flush()
+                    os.fsync(marker.fileno())
+            except Exception:
+                try:
+                    os.remove(marker_path)
+                except OSError:
+                    pass
+                raise
             break
         except FileExistsError:
             try:
