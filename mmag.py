@@ -156,18 +156,10 @@ def _remove_upload_payload(staging_dir):
             pass
 
 
-def _mark_upload_cancelled(upload_id, message="Upload abgebrochen. Temporäre Daten wurden gelöscht."):
+def _mark_upload_cancelled(upload_id):
+    """Delete the complete private staging directory for an abandoned upload."""
     staging_dir = _staging_path(upload_id)
-    status_data = _load_json_file(_status_path(upload_id)) or {}
-    _remove_upload_payload(staging_dir)
-    _write_upload_status(
-        upload_id,
-        "cancelled",
-        0,
-        int(status_data.get("total_bytes", 0)),
-        int(status_data.get("file_count", 0)),
-        message,
-    )
+    shutil.rmtree(staging_dir)
 
 
 def _chunk_count(file_size):
