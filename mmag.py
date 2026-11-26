@@ -860,12 +860,17 @@ def mmag_chunk_status(upload_id):
 
     # If the web process was restarted during ZIP creation, recover the
     # background task when the browser next polls its status.
-    if status_data.get("state") == "processing":
+    if status_data.get("state") in {"processing", "cancelling"}:
         try:
+            # A cancellation marker makes a recovered worker clean up instead
+            # of finishing the archive after a web-process restart.
             _start_archive_finalization(upload_id)
         except Exception:
             current_app.logger.exception("Could not recover MMAG ZIP finalization.")
         status_data = _load_json_file(_status_path(upload_id)) or status_data
+
+    if _upload_cancel_requested(upload_id):
+        status_data["state"] = "cancelling"
 
     total_bytes = int(status_data.get("total_bytes", 0))
     processed_bytes = int(status_data.get("processed_bytes", 0))
