@@ -115,6 +115,7 @@
             const progressText = document.getElementById('mmagProgressText');
             const status = document.getElementById('mmagStatus');
             const submitButton = document.getElementById('mmagSubmitButton');
+            const nameInput = document.getElementById('mmagName');
 
             let selectedFiles = [];
             let uploadInProgress = false;
@@ -158,7 +159,11 @@
                     </div>
                 `).join('');
 
-                submitButton.disabled = selectedFiles.length === 0 || uploadInProgress;
+                submitButton.disabled = (
+                    selectedFiles.length === 0 ||
+                    !nameInput.value.trim() ||
+                    uploadInProgress
+                );
             }
 
             function addSelectedFiles(fileList) {
@@ -185,6 +190,7 @@
             fileInput.addEventListener('change', () => {
                 addSelectedFiles(fileInput.files);
             });
+            nameInput.addEventListener('input', updateSelection);
 
             addFilesButton.addEventListener('click', openFilePicker);
             dropZone.addEventListener('click', openFilePicker);
@@ -252,7 +258,7 @@
                 progressContainer.setAttribute('aria-valuenow', '0');
 
                 const formData = new FormData();
-                formData.append('name', document.getElementById('mmagName').value.trim());
+                formData.append('name', nameInput.value.trim());
                 selectedFiles.forEach(file => formData.append('files', file, file.name));
 
                 const xhr = new XMLHttpRequest();
@@ -288,7 +294,7 @@
 
                         selectedFiles = [];
                         updateSelection();
-                        document.getElementById('mmagName').value = '';
+                        nameInput.value = '';
                     } else {
                         showStatus(response.message || 'Upload fehlgeschlagen.', false);
                         progressText.textContent = 'Upload fehlgeschlagen.';
@@ -296,7 +302,7 @@
 
                     uploadInProgress = false;
                     addFilesButton.disabled = false;
-                    submitButton.disabled = selectedFiles.length === 0;
+                    updateSelection();
                 });
 
                 xhr.addEventListener('error', () => {
@@ -307,7 +313,7 @@
                     progressText.textContent = 'Verbindung unterbrochen.';
                     uploadInProgress = false;
                     addFilesButton.disabled = false;
-                    submitButton.disabled = selectedFiles.length === 0;
+                    updateSelection();
                 });
 
                 xhr.addEventListener('abort', () => {
@@ -318,7 +324,7 @@
                     progressText.textContent = 'Upload abgebrochen.';
                     uploadInProgress = false;
                     addFilesButton.disabled = false;
-                    submitButton.disabled = selectedFiles.length === 0;
+                    updateSelection();
                 });
 
                 xhr.send(formData);
