@@ -283,6 +283,18 @@ def _finalize_upload_worker(upload_id):
         os.replace(temporary_archive_path, final_archive_path)
         temporary_archive_path = None
 
+        # Publish the completed state before removing source chunks. If cleanup
+        # later fails, the finished archive is still available and the client
+        # can safely observe a completed upload.
+        _write_upload_status(
+            upload_id,
+            "completed",
+            total_bytes,
+            total_bytes,
+            file_count,
+            f"{file_count} Datei(en) erfolgreich in einem unkomprimierten ZIP-Archiv gespeichert.",
+        )
+
         # Source chunks are no longer required once the complete archive exists.
         for file_index in range(file_count):
             shutil.rmtree(
@@ -294,14 +306,6 @@ def _finalize_upload_worker(upload_id):
         except OSError:
             pass
 
-        _write_upload_status(
-            upload_id,
-            "completed",
-            total_bytes,
-            total_bytes,
-            file_count,
-            f"{file_count} Datei(en) erfolgreich in einem unkomprimierten ZIP-Archiv gespeichert.",
-        )
         logging.getLogger(__name__).info(
             "MMAG upload completed: %d file(s), uncompressed ZIP archive created.",
             file_count,
