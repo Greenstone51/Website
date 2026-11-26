@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow, noarchive">
+    <title>Greenstone51 // MMAG Upload</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="stylesheet" href="/static/style.css?v=22">
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <a class="logo" href="/">Greenstone51</a>
+        </div>
+    </header>
+    <main>
+        <div class="page-header">
+            <h1 class="page-title">MMAG Upload</h1>
+            <p class="page-subtitle">
+                Temporärer, passwortgeschützter Upload-Bereich.
+            </p>
+        </div>
+
+        <div class="card card-upload">
+            {% if error %}
+                <div class="alert alert-danger">{{ error }}</div>
+            {% endif %}
+            {% if success %}
+                <div class="alert alert-success">{{ success }}</div>
+            {% endif %}
+
+            {% if not authenticated %}
+                <form method="POST" action="/MMAG" autocomplete="on">
+                    <div class="form-group">
+                        <label class="form-label" for="password">Passwort</label>
+                        <input class="form-input" type="password" id="password"
+                               name="password" autocomplete="current-password"
+                               required autofocus>
+                    </div>
+                    <button class="btn-action w-100" type="submit">Freischalten</button>
+                </form>
+            {% else %}
+                <form method="POST" action="/MMAG" enctype="multipart/form-data">
+                    <input type="file" id="mmagFiles" name="files" multiple
+                           class="file-input-hidden" required>
+                    <label class="drop-zone" for="mmagFiles" id="dropZone">
+                        <span class="drop-zone-text" id="selectionText">
+                            <strong>Dateien auswählen</strong> oder hier ablegen
+                        </span>
+                        <span class="file-list-preview" id="fileNames"></span>
+                    </label>
+                    <button class="btn-action w-100 mt-1" type="submit">
+                        Upload starten
+                    </button>
+                </form>
+                {% if uploaded_names %}
+                    <p class="secret-desc mt-1">Gespeicherte Dateien:</p>
+                    <ul>
+                        {% for name in uploaded_names %}
+                            <li>{{ name }}</li>
+                        {% endfor %}
+                    </ul>
+                {% endif %}
+            {% endif %}
+        </div>
+    </main>
+    <script>
+        const input = document.getElementById('mmagFiles');
+        const dropZone = document.getElementById('dropZone');
+        if (input && dropZone) {
+            const names = document.getElementById('fileNames');
+            const updateNames = () => {
+                names.textContent = Array.from(input.files).map(file => file.name).join(' · ');
+            };
+            input.addEventListener('change', updateNames);
+            ['dragenter', 'dragover'].forEach(type => dropZone.addEventListener(type, event => {
+                event.preventDefault();
+                dropZone.classList.add('drag-over');
+            }));
+            ['dragleave', 'drop'].forEach(type => dropZone.addEventListener(type, event => {
+                event.preventDefault();
+                dropZone.classList.remove('drag-over');
+            }));
+            dropZone.addEventListener('drop', event => {
+                if (event.dataTransfer.files.length) {
+                    input.files = event.dataTransfer.files;
+                    updateNames();
+                }
+            });
+        }
+    </script>
+</body>
+</html>
