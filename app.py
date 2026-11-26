@@ -533,7 +533,7 @@ PUSH_SUBSCRIPTIONS_FILE = os.path.abspath(os.path.join(BASE_DIR, 'push_subscript
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['DOWNLOAD_FOLDER'] = DOWNLOAD_FOLDER
-app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100 MB
+# app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100 MB
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 SERVER_IP4 = ""
