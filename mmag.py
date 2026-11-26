@@ -655,86 +655,84 @@ def mmag_chunk_receive(upload_id, file_index, chunk_index):
     if auth_error:
         return auth_error
 
-    metadata = _load_upload_metadata(upload_id)
-    status_data = _load_json_file(_status_path(upload_id)) or {}
-    if status_data.get("state") != "uploading":
-        return _json_error("Dieser Upload nimmt keine weiteren Daten an.", 409)
-
-    # Each request carries exactly one 32-MiB chunk plus multipart framing.
-    # Reject oversized or lengthless requests before Werkzeug parses/spools them.
+    # Each request carries one 32-MiB chunk plus multipart framing.
     if request.content_length is None:
         return _json_error("Der Request benötigt einen Content-Length-Header.", 411)
     if request.content_length > MMAG_CHUNK_SIZE + 1024 * 1024:
         return _json_error("Der Datenblock überschreitet die erlaubte Größe.", 413)
 
-    files = metadata["files"]
-    if file_index < 0 or file_index >= len(files):
-        return _json_error("Ungültiger Dateiindex.", 400)
-
-    file_info = files[file_index]
-    if chunk_index < 0 or chunk_index >= file_info["chunk_count"]:
-        return _json_error("Ungültiger Chunk-Index.", 400)
-
     chunk_file = request.files.get("chunk")
     if chunk_file is None:
         return _json_error("Upload-Chunk fehlt.", 400)
 
-    expected_size = _expected_chunk_size(file_info["size"], chunk_index)
-    part_path = _chunk_path(upload_id, file_index, chunk_index)
-    part_directory = os.path.dirname(part_path)
-    os.makedirs(part_directory, mode=0o700, exist_ok=True)
-
-    # A retry after a lost response is idempotent: an already stored complete
-    # chunk is accepted instead of being written a second time.
     try:
-        existing_size = os.path.getsize(part_path)
-        if existing_size == expected_size:
-            return jsonify({"success": True, "already_received": True})
-        # Recover from a partial chunk left by a process interruption.
-        os.remove(part_path)
-    except FileNotFoundError:
-        pass
-    except OSError:
-        return _json_error("Ein vorhandener Datenblock kann nicht ersetzt werden.", 500)
+        with _upload_lock(upload_id):
+            metadata = _load_upload_metadata(upload_id)
+            status_data = _load_json_file(_status_path(upload_id)) or {}
+            if status_data.get("state") != "uploading":
+                return _json_error("Dieser Upload nimmt keine weiteren Daten an.", 409)
 
-    try:
-        fd = os.open(
-            part_path,
-            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
-            0o600,
-        )
-    except FileExistsError:
-        return _json_error("Dieser Chunk wird bereits verarbeitet. Bitte erneut versuchen.", 409)
+            files = metadata["files"]
+            if file_index < 0 or file_index >= len(files):
+                return _json_error("Ungültiger Dateiindex.", 400)
 
-    received = 0
-    try:
-        with os.fdopen(fd, "wb") as destination:
-            while True:
-                read_size = min(
-                    MMAG_COPY_BUFFER_SIZE,
-                    max(1, expected_size - received + 1),
+            file_info = files[file_index]
+            if chunk_index < 0 or chunk_index >= file_info["chunk_count"]:
+                return _json_error("Ungültiger Chunk-Index.", 400)
+
+            expected_size = _expected_chunk_size(file_info["size"], chunk_index)
+            part_path = _chunk_path(upload_id, file_index, chunk_index)
+            part_directory = os.path.dirname(part_path)
+            os.makedirs(part_directory, mode=0o700, exist_ok=True)
+
+            # A retry after a lost response is idempotent.
+            try:
+                existing_size = os.path.getsize(part_path)
+                if existing_size == expected_size:
+                    return jsonify({"success": True, "already_received": True})
+                os.remove(part_path)
+            except FileNotFoundError:
+                pass
+
+            fd = os.open(
+                part_path,
+                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+                0o600,
+            )
+            received = 0
+            try:
+                with os.fdopen(fd, "wb") as destination:
+                    while True:
+                        read_size = min(
+                            MMAG_COPY_BUFFER_SIZE,
+                            max(1, expected_size - received + 1),
+                        )
+                        block = chunk_file.stream.read(read_size)
+                        if not block:
+                            break
+                        received += len(block)
+                        if received > expected_size:
+                            raise ValueError("Chunk exceeds expected size.")
+                        destination.write(block)
+
+                    if received != expected_size:
+                        raise ValueError("Chunk size does not match expected size.")
+
+                    destination.flush()
+                    os.fsync(destination.fileno())
+            except Exception:
+                try:
+                    os.remove(part_path)
+                except OSError:
+                    pass
+                return _json_error(
+                    "Ein Datenblock wurde unvollständig übertragen. Bitte erneut versuchen.",
+                    400,
                 )
-                block = chunk_file.stream.read(read_size)
-                if not block:
-                    break
-                received += len(block)
-                if received > expected_size:
-                    raise ValueError("Chunk exceeds expected size.")
-                destination.write(block)
 
-            if received != expected_size:
-                raise ValueError("Chunk size does not match expected size.")
-
-            destination.flush()
-            os.fsync(destination.fileno())
-    except Exception:
-        try:
-            os.remove(part_path)
-        except OSError:
-            pass
-        return _json_error("Ein Datenblock wurde unvollständig übertragen. Bitte erneut versuchen.", 400)
-
-    return jsonify({"success": True, "received_bytes": received})
+            return jsonify({"success": True, "received_bytes": received})
+    except FileNotFoundError:
+        return _json_error("Dieser Upload existiert nicht mehr.", 404)
 
 
 @mmag_bp.route("/MMAG/chunk/<upload_id>/finish", methods=["POST"])
@@ -744,26 +742,40 @@ def mmag_chunk_finish(upload_id):
     if auth_error:
         return auth_error
 
-    status_path = _status_path(upload_id)
-    status_data = _load_json_file(status_path) or {}
+    try:
+        with _upload_lock(upload_id):
+            status_data = _load_json_file(_status_path(upload_id)) or {}
+            state = status_data.get("state")
 
-    # The completed worker removes upload metadata and temporary chunks. Check
-    # completion first so a repeated finish request remains idempotent.
-    if status_data.get("state") == "completed":
-        return jsonify(
-            {
-                "success": True,
-                "state": "completed",
-                "message": status_data.get("message", "Upload erfolgreich abgeschlossen."),
-            }
-        )
+            if state == "completed":
+                return jsonify(
+                    {
+                        "success": True,
+                        "state": "completed",
+                        "message": status_data.get("message", "Upload erfolgreich abgeschlossen."),
+                    }
+                )
+            if state in {"cancelled", "cancelling"}:
+                return _json_error("Dieser Upload wurde abgebrochen.", 409)
 
-    metadata = _load_upload_metadata(upload_id)
-    if not _validate_upload_chunks(upload_id, metadata):
-        return _json_error(
-            "Die Übertragung ist noch nicht vollständig. Fehlende Datenblöcke werden erneut benötigt.",
-            409,
-        )
+            metadata = _load_upload_metadata(upload_id)
+            if not _validate_upload_chunks(upload_id, metadata):
+                return _json_error(
+                    "Die Übertragung ist noch nicht vollständig. Fehlende Datenblöcke werden erneut benötigt.",
+                    409,
+                )
+
+            if state == "uploading" or state == "failed":
+                _write_upload_status(
+                    upload_id,
+                    "processing",
+                    int(status_data.get("total_bytes", metadata["total_bytes"])),
+                    int(status_data.get("total_bytes", metadata["total_bytes"])),
+                    len(metadata["files"]),
+                    "ZIP-Archiv wird erstellt.",
+                )
+    except FileNotFoundError:
+        return _json_error("Dieser Upload existiert nicht mehr.", 404)
 
     try:
         _start_archive_finalization(upload_id)
@@ -772,6 +784,67 @@ def mmag_chunk_finish(upload_id):
         return _json_error("Die ZIP-Erstellung konnte nicht gestartet werden.", 500)
 
     return jsonify({"success": True, "state": "processing"}), 202
+
+
+@mmag_bp.route("/MMAG/chunk/<upload_id>/cancel", methods=["POST"])
+@mmag_bp.route("/mmag/chunk/<upload_id>/cancel", methods=["POST"])
+def mmag_chunk_cancel(upload_id):
+    auth_error = _require_mmag_auth()
+    if auth_error:
+        return auth_error
+
+    try:
+        with _upload_lock(upload_id):
+            status_data = _load_json_file(_status_path(upload_id))
+            if not isinstance(status_data, dict):
+                return _json_error("Dieser Upload existiert nicht mehr.", 404)
+
+            state = status_data.get("state")
+            if state == "completed":
+                return _json_error("Der Upload ist bereits abgeschlossen.", 409)
+            if state == "cancelled":
+                return jsonify({"success": True, "state": "cancelled"})
+
+            if state in {"processing", "cancelling"}:
+                marker_path = os.path.join(_staging_path(upload_id), ".cancel_requested")
+                fd = os.open(
+                    marker_path,
+                    os.O_WRONLY | os.O_CREAT,
+                    0o600,
+                )
+                os.close(fd)
+                _write_upload_status(
+                    upload_id,
+                    "cancelling",
+                    int(status_data.get("processed_bytes", 0)),
+                    int(status_data.get("total_bytes", 0)),
+                    int(status_data.get("file_count", 0)),
+                    "Upload wird abgebrochen und temporäre Daten werden gelöscht.",
+                )
+                return jsonify(
+                    {
+                        "success": True,
+                        "state": "cancelling",
+                        "message": "Upload wird abgebrochen.",
+                    }
+                ), 202
+
+            if state not in {"uploading", "failed"}:
+                return _json_error("Dieser Upload kann nicht mehr abgebrochen werden.", 409)
+
+            _mark_upload_cancelled(upload_id)
+            return jsonify(
+                {
+                    "success": True,
+                    "state": "cancelled",
+                    "message": "Der abgebrochene Upload und seine temporären Dateien wurden gelöscht.",
+                }
+            )
+    except FileNotFoundError:
+        return _json_error("Dieser Upload existiert nicht mehr.", 404)
+    except Exception:
+        current_app.logger.exception("Could not cancel MMAG upload %s.", upload_id)
+        return _json_error("Der Upload konnte nicht vollständig abgebrochen werden.", 500)
 
 
 @mmag_bp.route("/MMAG/chunk/<upload_id>/status", methods=["GET"])
