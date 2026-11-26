@@ -205,6 +205,13 @@ def _finalize_upload_worker(upload_id):
         total_bytes = metadata["total_bytes"]
         file_count = len(files)
 
+        processed_bytes = 0
+        next_status_update = MMAG_ARCHIVE_PROGRESS_INTERVAL
+        _write_upload_status(
+            upload_id, "processing", 0, total_bytes, file_count,
+            "ZIP-Archiv wird erstellt.",
+        )
+
         archive_name, final_archive_path, temporary_archive_path, archive_fd = (
             _archive_path_for_prefix(name_prefix, upload_id, staging_dir)
         )
@@ -230,15 +237,9 @@ def _finalize_upload_worker(upload_id):
                 pass
             return
 
-        processed_bytes = 0
-        next_status_update = MMAG_ARCHIVE_PROGRESS_INTERVAL
-
-        _write_upload_status(
-            upload_id, "processing", 0, total_bytes, file_count,
-            "ZIP-Archiv wird erstellt.",
-        )
-
-        with os.fdopen(archive_fd, "w+b") as archive_file:
+        archive_file_context = os.fdopen(archive_fd, "w+b")
+        archive_fd = None
+        with archive_file_context as archive_file:
             with zipfile.ZipFile(
                 archive_file,
                 mode="w",
@@ -339,6 +340,11 @@ def _finalize_upload_worker(upload_id):
             "MMAG background archive creation failed for upload %s.",
             upload_id,
         )
+        if "archive_fd" in locals() and archive_fd is not None:
+            try:
+                os.close(archive_fd)
+            except OSError:
+                pass
         if temporary_archive_path:
             try:
                 os.remove(temporary_archive_path)
