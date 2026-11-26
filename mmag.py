@@ -718,31 +718,37 @@ def mmag_chunk_status(upload_id):
     if request.args.get("resume") == "1" and response["state"] in {
         "uploading", "processing", "failed"
     }:
-        metadata = _load_upload_metadata(upload_id)
-        received_bytes = 0
-        next_file_index = len(metadata["files"])
-        next_chunk_index = 0
+        if response["state"] == "uploading":
+            metadata = _load_upload_metadata(upload_id)
+            received_bytes = 0
+            next_file_index = len(metadata["files"])
+            next_chunk_index = 0
 
-        for file_index, file_info in enumerate(metadata["files"]):
-            found_missing_chunk = False
-            for chunk_index in range(file_info["chunk_count"]):
-                part_path = _chunk_path(upload_id, file_index, chunk_index)
-                expected_size = _expected_chunk_size(file_info["size"], chunk_index)
-                try:
-                    actual_size = os.path.getsize(part_path)
-                except OSError:
-                    actual_size = -1
+            for file_index, file_info in enumerate(metadata["files"]):
+                found_missing_chunk = False
+                for chunk_index in range(file_info["chunk_count"]):
+                    part_path = _chunk_path(upload_id, file_index, chunk_index)
+                    expected_size = _expected_chunk_size(file_info["size"], chunk_index)
+                    try:
+                        actual_size = os.path.getsize(part_path)
+                    except OSError:
+                        actual_size = -1
 
-                if actual_size != expected_size:
-                    next_file_index = file_index
-                    next_chunk_index = chunk_index
-                    found_missing_chunk = True
+                    if actual_size != expected_size:
+                        next_file_index = file_index
+                        next_chunk_index = chunk_index
+                        found_missing_chunk = True
+                        break
+
+                    received_bytes += expected_size
+
+                if found_missing_chunk:
                     break
-
-                received_bytes += expected_size
-
-            if found_missing_chunk:
-                break
+        else:
+            # Finalization only starts after every chunk has been verified.
+            received_bytes = total_bytes
+            next_file_index = response["file_count"]
+            next_chunk_index = 0
 
         response["next_file_index"] = next_file_index
         response["next_chunk_index"] = next_chunk_index
