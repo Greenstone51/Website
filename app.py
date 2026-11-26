@@ -1038,6 +1038,172 @@ def upload_page():
 def download_page():
     return render_template('download.html')
 
+# Temporary routes for Multimedia
+
+MM_UPLOAD_DIR = os.path.abspath(os.path.join(BASE_DIR, 'mm_uploads'))
+os.makedirs(MM_UPLOAD_DIR, exist_ok=True)
+
+@app.route('/multimedia-login', methods=["GET", "POST"])
+def multimedia_login():
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        turnstile_token = request.form.get('cf-turnstile-response', '')
+        client_ip = request.headers.get('CF-Connecting-IP', request.remote_addr)
+
+        if TURNSTILE_SECRET_KEY and not verify_turnstile(turnstile_token, client_ip):
+            return render_template('multimedia_login.html', logged_in=False, turnstile_sitekey=TURNSTILE_SITEKEY, error="Sicherheitsüberprüfung fehlgeschlagen (Ich bin kein Roboter).")
+
+        valid = check_password_hash(UPLOAD_PASSWORD_HASH, password) if UPLOAD_PASSWORD_HASH else False
+
+        if valid:
+            session['mm_logged_in'] = True
+            return redirect(url_for('multimedia_login'))
+        return render_template('multimedia_login.html', logged_in=False, turnstile_sitekey=TURNSTILE_SITEKEY, error="Zutritt verweigert! Falsches Passwort.")
+
+    if not session.get('mm_logged_in'):
+        return render_template('multimedia_login.html', logged_in=False, turnstile_sitekey=TURNSTILE_SITEKEY)
+    return render_template('multimedia_login.html', logged_in=True)
+
+@app.route('/multimedia-upload', methods=['GET', 'POST'])
+def multimedia_upload():
+    if not session.get('mm_logged_in'):
+        return redirect(url_for('multimedia_login'))
+
+    client_id = get_upload_client_id()
+
+    if request.method == 'POST':
+        if is_rate_limited(client_id):
+            abort(429)
+
+        raw_files = []
+        for key in request.files:
+            raw_files.extend(request.files.getlist(key))
+
+        files = [f for f in raw_files if f and f.filename != '']
+
+        if not files:
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify({'success': False, 'message': 'Keine Dateien empfangen.'}), 400
+            return render_template('multimedia_upload.html', message="Keine Datei ausgewählt.", success=False)
+
+        custom_name_raw = request.form.get('custom_name', '').strip()
+
+        count = 0
+        uploaded_names = []
+        total_files = len(files)
+
+        for idx, file in enumerate(files):
+            orig_filename = secure_filename(file.filename)
+            if not orig_filename:
+                orig_filename = f"upload_{uuid.uuid4().hex[:8]}"
+
+            _, ext = os.path.splitext(orig_filename)
+
+            if custom_name_raw:
+                clean_custom = secure_filename(custom_name_raw)
+                if not clean_custom:
+                    clean_custom = f"upload_{uuid.uuid4().hex[:8]}"
+
+                custom_base, custom_ext = os.path.splitext(clean_custom)
+                if not custom_ext and ext:
+                    file_ext = ext
+                    base_name = clean_custom
+                else:
+                    file_ext = custom_ext
+                    base_name = custom_base
+
+                if total_files > 1:
+                    filename = f"{base_name}_{idx + 1}{file_ext}"
+                else:
+                    filename = f"{base_name}{file_ext}"
+            else:
+                filename = orig_filename
+
+            save_path = os.path.join(MM_UPLOAD_DIR, filename)
+            file.save(save_path)
+            os.utime(save_path, None)
+            count += 1
+            uploaded_names.append(filename)
+
+        msg = f"{count} Datei(en) erfolgreich hochgeladen."
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify({'success': True, 'message': msg})
+
+        return render_template('multimedia_upload.html', message=msg, success=True)
+
+    return render_template('multimedia_upload.html')
+
+@app.route('/multimedia-download')
+def multimedia_download():
+    if not session.get('mm_logged_in'):
+        return redirect(url_for('multimedia_login'))
+    return render_template('multimedia_download.html')
+
+@app.route('/multimedia-download/api/files', methods=['GET'])
+def mm_api_list_files():
+    if not session.get('mm_logged_in'):
+        return redirect(url_for('multimedia_login'))
+    folder = MM_UPLOAD_DIR
+    file_list = []
+    if os.path.exists(folder):
+        for fname in os.listdir(folder):
+            fpath = os.path.join(folder, fname)
+            if os.path.isfile(fpath) and not fname.startswith('.'):
+                stat = os.stat(fpath)
+                file_list.append({
+                    'name': fname,
+                    'size': stat.st_size,
+                    'mtime': stat.st_mtime
+                })
+    return jsonify(file_list)
+
+@app.route('/multimedia-download/file/<path:filename>', methods=['GET'])
+def mm_download_file(filename):
+    if not session.get('mm_logged_in'):
+        return redirect(url_for('multimedia_login'))
+    try:
+        return send_from_directory(
+            MM_UPLOAD_DIR,
+            filename,
+            as_attachment=True
+        )
+    except FileNotFoundError:
+        abort(404)
+
+@app.route('/multimedia-download/zip', methods=['POST'])
+def mm_download_zip():
+    if not session.get('mm_logged_in'):
+        return redirect(url_for('multimedia_login'))
+    data = request.get_json() or {}
+    filenames = data.get('files', [])
+    if not filenames:
+        return jsonify({'error': 'Keine Dateien ausgewählt'}), 400
+
+    memory_file = io.BytesIO()
+    base_dir = MM_UPLOAD_DIR
+
+    with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for fname in filenames:
+            target_path = os.path.abspath(os.path.join(base_dir, fname))
+            if os.path.commonpath([base_dir, target_path]) == base_dir and os.path.isfile(target_path):
+                arcname = os.path.basename(target_path)
+                zf.write(target_path, arcname=arcname)
+
+    memory_file.seek(0)
+    return send_file(
+        memory_file,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name='greenstone51_downloads.zip'
+    )
+
+@app.route('/multimedia-logout')
+def multimedia_logout():
+    session.pop('mm_logged_in', None)
+    return redirect(url_for('multimedia_login'))
+
+
+
 @app.route('/vpn51/admin', methods=['GET', 'POST'])
 def admin_page():
     if request.method == 'POST':

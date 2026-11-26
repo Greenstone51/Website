@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Greenstone51 // Admin</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="stylesheet" href="/static/style.css?v=22">
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+</head>
+<body>
+    {% from 'partials/nav.html' import site_header, site_footer %}
+
+    {{ site_header('multimedia-login', 'multimedia-login') }}
+
+    <main class="{% if not logged_in %}main-centered{% endif %}">
+        {% if not logged_in %}
+            <div class="card login-card">
+                <h2 class="login-title">Login Benötigt</h2>
+                {% if error %}
+                    <div class="alert alert-danger">{{ error }}</div>
+                {% endif %}
+                <form method="POST" action="/multimedia-login">
+                    <div class="form-group">
+                        <label for="password" class="form-label">Passwort</label>
+                        <input type="password" id="password" name="password" placeholder="••••••••" required autofocus class="form-input">
+                    </div>
+
+                    {% if turnstile_sitekey %}
+                    <div class="turnstile-box">
+                        <div class="cf-turnstile mb-1" data-sitekey="{{ turnstile_sitekey }}" data-theme="dark"></div>
+                    </div>
+                    {% endif %}
+
+                    <button type="submit" class="btn-action w-100">Einloggen &rarr;</button>
+                </form>
+            </div>
+        {% else %}
+            <a href="/multimedia-upload" class="btn-action btn-outline">Uploads</a>
+            <a href="/multimedia-download" class="btn-action btn-outline">Downloads</a>
+            <div class="logout-wrapper">
+                <a href="/multimedia-logout" class="btn-action btn-outline">Ausloggen</a>
+            </div>
+        {% endif %}
+    </main>
+</body>
+</html>
