@@ -190,6 +190,10 @@ def _chunk_path(upload_id, file_index, chunk_index):
     )
 
 
+class _UploadCancelled(Exception):
+    """Raised when the owner explicitly abandons an unfinished upload."""
+
+
 def _unique_member_name(original_name, name_prefix, used_names):
     """Build a safe prefixed ZIP member name and avoid duplicate member paths."""
     safe_filename = secure_filename(original_name) or "upload"
@@ -259,6 +263,9 @@ def _finalize_upload_worker(upload_id):
         name_prefix = metadata["name_prefix"]
         total_bytes = metadata["total_bytes"]
         file_count = len(files)
+
+        if _upload_cancel_requested(upload_id):
+            raise _UploadCancelled()
 
         processed_bytes = 0
         next_status_update = MMAG_ARCHIVE_PROGRESS_INTERVAL
@@ -330,6 +337,8 @@ def _finalize_upload_worker(upload_id):
                                     block = part.read(MMAG_COPY_BUFFER_SIZE)
                                     if not block:
                                         break
+                                    if _upload_cancel_requested(upload_id):
+                                        raise _UploadCancelled()
                                     destination.write(block)
                                     processed_bytes += len(block)
 
@@ -360,21 +369,24 @@ def _finalize_upload_worker(upload_id):
             os.fsync(archive_file.fileno())
 
         os.chmod(temporary_archive_path, 0o600)
-        os.replace(temporary_archive_path, final_archive_path)
-        temporary_archive_path = None
-        archive_is_published = True
 
-        # Publish the completed state before removing source chunks. If cleanup
-        # later fails, the finished archive is still available and the client
-        # can safely observe a completed upload.
-        _write_upload_status(
-            upload_id,
-            "completed",
-            total_bytes,
-            total_bytes,
-            file_count,
-            f"{file_count} Datei(en) erfolgreich in einem unkomprimierten ZIP-Archiv gespeichert.",
-        )
+        # Coordinate the final rename with cancellation so an archive cannot
+        # appear after the user has successfully cancelled the upload.
+        with _upload_lock(upload_id):
+            if _upload_cancel_requested(upload_id):
+                raise _UploadCancelled()
+            os.replace(temporary_archive_path, final_archive_path)
+            temporary_archive_path = None
+            archive_is_published = True
+
+            _write_upload_status(
+                upload_id,
+                "completed",
+                total_bytes,
+                total_bytes,
+                file_count,
+                f"{file_count} Datei(en) erfolgreich in einem unkomprimierten ZIP-Archiv gespeichert.",
+            )
 
         # Source chunks are no longer required once the complete archive exists.
         for file_index in range(file_count):
@@ -392,7 +404,27 @@ def _finalize_upload_worker(upload_id):
             file_count,
         )
 
-    except Exception:
+    except Exception as error:
+        if isinstance(error, _UploadCancelled):
+            logging.getLogger(__name__).info(
+                "MMAG upload %s was cancelled; removing temporary data.",
+                upload_id,
+            )
+            if temporary_archive_path:
+                try:
+                    os.remove(temporary_archive_path)
+                except OSError:
+                    pass
+            try:
+                with _upload_lock(upload_id):
+                    _mark_upload_cancelled(upload_id)
+            except Exception:
+                logging.getLogger(__name__).exception(
+                    "Could not clean up cancelled MMAG upload %s.",
+                    upload_id,
+                )
+            return
+
         logging.getLogger(__name__).exception(
             "MMAG background archive creation failed for upload %s.",
             upload_id,
