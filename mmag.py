@@ -164,31 +164,32 @@ def _write_upload_status(upload_id, state, processed_bytes, total_bytes, file_co
     )
 
 
-def _archive_path_for_prefix(name_prefix):
-    """Reserve a unique temporary archive path; final ZIP appears atomically."""
-    archive_stem = f"{name_prefix}_upload"
-    for attempt in range(100):
-        if attempt == 0:
-            archive_name = f"{archive_stem}.zip"
-        else:
-            archive_name = f"{archive_stem}_{uuid.uuid4().hex[:10]}.zip"
+def _archive_path_for_prefix(name_prefix, upload_id, staging_dir):
+    """Create the archive in staging, then atomically publish it in MMAG_uploads."""
+    # The upload ID makes the final name unique even when the same person starts
+    # several uploads with the same name at the same time.
+    archive_name = f"{name_prefix}_upload_{upload_id[:12]}.zip"
+    final_path = os.path.join(MMAG_UPLOAD_FOLDER, archive_name)
+    temporary_path = os.path.join(staging_dir, "archive.building")
 
-        final_path = os.path.join(MMAG_UPLOAD_FOLDER, archive_name)
-        temporary_path = final_path + ".building"
-        try:
-            fd = os.open(
-                temporary_path,
-                os.O_RDWR | os.O_CREAT | os.O_EXCL,
-                0o600,
-            )
-            if os.path.exists(final_path):
-                os.close(fd)
-                os.remove(temporary_path)
-                continue
-            return archive_name, final_path, temporary_path, fd
-        except FileExistsError:
-            continue
-    raise OSError("Could not allocate a unique archive filename.")
+    if os.path.exists(final_path):
+        # The previous worker may have completed the atomic rename but stopped
+        # before it could write the completed status.
+        return archive_name, final_path, None, None
+
+    # A process may have been terminated while it was writing the previous
+    # temporary archive. Only this upload's finalizer can own this staging file.
+    try:
+        os.remove(temporary_path)
+    except FileNotFoundError:
+        pass
+
+    fd = os.open(
+        temporary_path,
+        os.O_RDWR | os.O_CREAT | os.O_EXCL,
+        0o600,
+    )
+    return archive_name, final_path, temporary_path, fd
 
 
 def _finalize_upload_worker(upload_id):
@@ -205,8 +206,30 @@ def _finalize_upload_worker(upload_id):
         file_count = len(files)
 
         archive_name, final_archive_path, temporary_archive_path, archive_fd = (
-            _archive_path_for_prefix(name_prefix)
+            _archive_path_for_prefix(name_prefix, upload_id, staging_dir)
         )
+
+        if archive_fd is None:
+            # An atomic rename from an earlier worker already published the ZIP.
+            _write_upload_status(
+                upload_id,
+                "completed",
+                total_bytes,
+                total_bytes,
+                file_count,
+                f"{file_count} Datei(en) erfolgreich in einem unkomprimierten ZIP-Archiv gespeichert.",
+            )
+            for file_index in range(file_count):
+                shutil.rmtree(
+                    os.path.join(staging_dir, f"file_{file_index:08d}"),
+                    ignore_errors=True,
+                )
+            try:
+                os.remove(os.path.join(staging_dir, "metadata.json"))
+            except OSError:
+                pass
+            return
+
         processed_bytes = 0
         next_status_update = MMAG_ARCHIVE_PROGRESS_INTERVAL
 
