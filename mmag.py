@@ -574,6 +574,13 @@ def mmag_chunk_receive(upload_id, file_index, chunk_index):
     if status_data.get("state") != "uploading":
         return _json_error("Dieser Upload nimmt keine weiteren Daten an.", 409)
 
+    # Each request carries exactly one 32-MiB chunk plus multipart framing.
+    # Reject oversized or lengthless requests before Werkzeug parses/spools them.
+    if request.content_length is None:
+        return _json_error("Der Request benötigt einen Content-Length-Header.", 411)
+    if request.content_length > MMAG_CHUNK_SIZE + 1024 * 1024:
+        return _json_error("Der Datenblock überschreitet die erlaubte Größe.", 413)
+
     files = metadata["files"]
     if file_index < 0 or file_index >= len(files):
         return _json_error("Ungültiger Dateiindex.", 400)
