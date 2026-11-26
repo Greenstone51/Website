@@ -87,11 +87,8 @@
                             id="mmagAddFiles">Weitere Dateien hinzufügen</button>
                     <button class="btn-action w-100 mt-1" type="submit"
                             id="mmagSubmitButton" disabled>Upload starten</button>
-
-                    <p class="form-label mt-1">
-                        Große Uploads werden in 32-MiB-Blöcken übertragen und anschließend
-                        serverseitig in einem ZIP-Archiv ohne Komprimierung gebündelt.
-                    </p>
+                    <button class="btn-action btn-outline w-100 mt-1 hidden" type="button"
+                            id="mmagDiscardButton">Abbrechen und neu beginnen</button>
                 </form>
             {% endif %}
         </div>
@@ -114,6 +111,7 @@
             const progressText = document.getElementById('mmagProgressText');
             const status = document.getElementById('mmagStatus');
             const submitButton = document.getElementById('mmagSubmitButton');
+            const discardButton = document.getElementById('mmagDiscardButton');
             const nameInput = document.getElementById('mmagName');
 
             const endpointBase = form.action.replace(/\/$/, '');
@@ -185,6 +183,7 @@
 
                 const selectionLocked = Boolean(uploadSessionId) || uploadInProgress || resumeCheckInProgress;
                 nameInput.disabled = selectionLocked || Boolean(pendingResume);
+                discardButton.classList.toggle('hidden', !(uploadSessionId || pendingResume) || uploadInProgress);
                 addFilesButton.disabled = selectionLocked;
                 dropZone.setAttribute('aria-disabled', selectionLocked ? 'true' : 'false');
                 submitButton.disabled = (
@@ -320,7 +319,7 @@
                         nameInput.value = '';
                         clearResumeState();
                         progressText.textContent = 'Upload bereits abgeschlossen.';
-                        updateProgress(Number(state.total_bytes) || 0, 'ZIP-Erstellung abgeschlossen');
+                        updateProgress(Number(state.total_bytes) || 0, 'Upload abgeschlossen');
                         return;
                     }
 
@@ -341,7 +340,7 @@
                     progressText.textContent = 'Vorheriger Upload wiederhergestellt.';
                     updateProgress(acknowledgedBytes, 'Bereits übertragene Daten');
                     showStatus(
-                        'Vorheriger Upload wiederhergestellt. Bereits übertragene Blöcke werden übersprungen.',
+                        'Upload wurde wiederhergestellt. Du kannst fortfahren oder neu beginnen.',
                         true
                     );
                 } catch (error) {
@@ -369,7 +368,7 @@
                         pendingResume = parsed;
                         nameInput.value = parsed.name;
                         showStatus(
-                            'Ein unterbrochener Upload wurde gefunden. Wähle erneut dieselben Dateien aus, um ihn fortzusetzen.',
+                            'Ein unterbrochener Upload wurde gefunden. Wähle dieselben Dateien erneut aus, um fortzufahren.',
                             true
                         );
                     }
@@ -445,7 +444,7 @@
                         const currentChunkBytes = Math.min(event.loaded, blob.size);
                         updateProgress(
                             progressBase + currentChunkBytes,
-                            'Dateien werden übertragen'
+                            'Dateien werden hochgeladen'
                         );
                     });
 
@@ -514,7 +513,7 @@
                             throw error;
                         }
                         progressText.textContent =
-                            'Verbindung unterbrochen. Datenblock wird erneut gesendet (' +
+                            'Verbindung unterbrochen. Erneuter Versuch (' +
                             (attempt + 1) + '/' + MAX_CHUNK_RETRIES + ') …';
                         await delay(1000 * Math.pow(2, attempt));
                     }
@@ -555,7 +554,7 @@
 
                 progressBar.style.width = '0%';
                 progressContainer.setAttribute('aria-valuenow', '0');
-                progressText.textContent = 'ZIP-Archiv wird auf dem Server erstellt …';
+                progressText.textContent = 'Dateien werden fertiggestellt …';
 
                 while (true) {
                     await delay(2000);
@@ -691,7 +690,7 @@
                     updateSelection();
                 } catch (error) {
                     showStatus(
-                        error.message + ' Bereits erfolgreich übertragene Datenblöcke bleiben erhalten. Klicke auf „Upload fortsetzen“, um den Vorgang erneut zu versuchen.',
+                        'Der Upload wurde unterbrochen. Du kannst ihn fortsetzen oder abbrechen und neu beginnen.',
                         false
                     );
                     submitButton.textContent = uploadSessionId
