@@ -27,7 +27,7 @@ os.makedirs(MMAG_UPLOAD_FOLDER, mode=0o700, exist_ok=True)
 try:
     os.chmod(MMAG_UPLOAD_FOLDER, 0o700)
 except OSError:
-    current_app.logger.warning("Could not restrict permissions on MMAG_uploads.", exc_info=True)
+    pass
 
 
 def _save_without_overwriting(file_storage, original_name):
