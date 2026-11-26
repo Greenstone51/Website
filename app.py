@@ -22,12 +22,16 @@ from werkzeug.utils import secure_filename
 from dotenv import load_dotenv
 
 from config import *
+from mmag import mmag_bp
 
 app = Flask(__name__)
 # Keep application INFO messages visible in systemd/journald in production.
 app.logger.setLevel(logging.INFO)
 
 app.secret_key = os.urandom(32)
+
+# Temporary, isolated MMAG upload feature (remove this registration to disable it).
+app.register_blueprint(mmag_bp)
 
 # Latest public upload from the channel handle. The public Atom feed does not
 # require a YouTube Data API key. The feed endpoint (/feeds/) is distinct from
