@@ -8,3 +8,5 @@ venv/
 push_subscriptions.json
 private_key.pem
 .flask_secret_key
+MMAG_uploads/
+.cleanup.lock
