@@ -6,14 +6,12 @@
     <meta name="robots" content="noindex, nofollow, noarchive">
     <title>Greenstone51 // MMAG Upload</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
-    <link rel="stylesheet" href="/static/style.css?v=22">
+    <link rel="stylesheet" href="/static/style.css?v=24">
 </head>
 <body>
-    <header>
-        <div class="header-content">
-            <a class="logo" href="/">Greenstone51</a>
-        </div>
-    </header>
+    {% from 'partials/nav.html' import site_header, site_footer %}
+    {{ site_header('', 'MMAG') }}
+
     <main>
         <div class="page-header">
             <h1 class="page-title">MMAG Upload</h1>
@@ -23,15 +21,19 @@
         </div>
 
         <div class="card card-upload">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% for category, message in messages %}
+                    <div class="alert {% if category == 'success' %}alert-success{% else %}alert-danger{% endif %}"
+                         role="status" aria-live="polite">{{ message }}</div>
+                {% endfor %}
+            {% endwith %}
+
             {% if error %}
-                <div class="alert alert-danger">{{ error }}</div>
-            {% endif %}
-            {% if success %}
-                <div class="alert alert-success">{{ success }}</div>
+                <div class="alert alert-danger" role="alert">{{ error }}</div>
             {% endif %}
 
             {% if not authenticated %}
-                <form method="POST" action="/MMAG" autocomplete="on">
+                <form method="POST" action="{{ request.path }}" autocomplete="on">
                     <div class="form-group">
                         <label class="form-label" for="password">Passwort</label>
                         <input class="form-input" type="password" id="password"
@@ -41,54 +43,184 @@
                     <button class="btn-action w-100" type="submit">Freischalten</button>
                 </form>
             {% else %}
-                <form method="POST" action="/MMAG" enctype="multipart/form-data">
+                <form id="mmagUploadForm" method="POST" action="{{ request.path }}"
+                      enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label class="form-label" for="mmagName">
+                            Dein Name (wird jedem Dateinamen vorangestellt)
+                        </label>
+                        <input class="form-input" type="text" id="mmagName" name="name"
+                               maxlength="64" autocomplete="name"
+                               placeholder="z. B. Max Mustermann" required>
+                    </div>
+
                     <input type="file" id="mmagFiles" name="files" multiple
                            class="file-input-hidden" required>
-                    <label class="drop-zone" for="mmagFiles" id="dropZone">
-                        <span class="drop-zone-text" id="selectionText">
+                    <label class="drop-zone" for="mmagFiles" id="mmagDropZone">
+                        <span class="drop-zone-text" id="mmagSelectionText">
                             <strong>Dateien auswählen</strong> oder hier ablegen
                         </span>
-                        <span class="file-list-preview" id="fileNames"></span>
+                        <span class="file-list-preview hidden" id="mmagFileNames"></span>
                     </label>
-                    <button class="btn-action w-100 mt-1" type="submit">
-                        Upload starten
-                    </button>
+
+                    <div class="progress-bar-container" id="mmagProgressContainer"
+                         role="progressbar" aria-label="Upload-Fortschritt"
+                         aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                        <div class="progress-bar" id="mmagProgressBar"></div>
+                    </div>
+                    <p class="form-label hidden" id="mmagProgressText"
+                       role="status" aria-live="polite"></p>
+
+                    <div id="mmagStatus" class="alert hidden"
+                         role="status" aria-live="polite"></div>
+
+                    <button class="btn-action w-100 mt-1" type="submit"
+                            id="mmagSubmitButton">Upload starten</button>
                 </form>
-                {% if uploaded_names %}
-                    <p class="secret-desc mt-1">Gespeicherte Dateien:</p>
-                    <ul>
-                        {% for name in uploaded_names %}
-                            <li>{{ name }}</li>
-                        {% endfor %}
-                    </ul>
-                {% endif %}
             {% endif %}
         </div>
     </main>
+
+    {{ site_footer() }}
+
     <script>
-        const input = document.getElementById('mmagFiles');
-        const dropZone = document.getElementById('dropZone');
-        if (input && dropZone) {
-            const names = document.getElementById('fileNames');
-            const updateNames = () => {
-                names.textContent = Array.from(input.files).map(file => file.name).join(' · ');
-            };
-            input.addEventListener('change', updateNames);
-            ['dragenter', 'dragover'].forEach(type => dropZone.addEventListener(type, event => {
-                event.preventDefault();
-                dropZone.classList.add('drag-over');
-            }));
-            ['dragleave', 'drop'].forEach(type => dropZone.addEventListener(type, event => {
-                event.preventDefault();
-                dropZone.classList.remove('drag-over');
-            }));
-            dropZone.addEventListener('drop', event => {
-                if (event.dataTransfer.files.length) {
-                    input.files = event.dataTransfer.files;
-                    updateNames();
+        (() => {
+            const form = document.getElementById('mmagUploadForm');
+            if (!form) return;
+
+            const fileInput = document.getElementById('mmagFiles');
+            const dropZone = document.getElementById('mmagDropZone');
+            const selectionText = document.getElementById('mmagSelectionText');
+            const fileNames = document.getElementById('mmagFileNames');
+            const progressContainer = document.getElementById('mmagProgressContainer');
+            const progressBar = document.getElementById('mmagProgressBar');
+            const progressText = document.getElementById('mmagProgressText');
+            const status = document.getElementById('mmagStatus');
+            const submitButton = document.getElementById('mmagSubmitButton');
+
+            let uploadInProgress = false;
+
+            function showStatus(message, success) {
+                status.textContent = message;
+                status.className = success ? 'alert alert-success' : 'alert alert-danger';
+            }
+
+            function updateSelection() {
+                const files = Array.from(fileInput.files || []);
+                progressContainer.style.display = 'none';
+                progressText.classList.add('hidden');
+                progressBar.style.width = '0%';
+                progressContainer.setAttribute('aria-valuenow', '0');
+
+                if (files.length === 0) {
+                    selectionText.classList.remove('hidden');
+                    fileNames.classList.add('hidden');
+                    fileNames.textContent = '';
+                    return;
                 }
+
+                selectionText.classList.add('hidden');
+                fileNames.classList.remove('hidden');
+                fileNames.textContent = files.map(file => file.name).join(' · ');
+            }
+
+            fileInput.addEventListener('change', updateSelection);
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropZone.addEventListener(eventName, event => {
+                    event.preventDefault();
+                    dropZone.classList.add('drag-over');
+                });
             });
-        }
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, event => {
+                    event.preventDefault();
+                    dropZone.classList.remove('drag-over');
+                });
+            });
+
+            dropZone.addEventListener('drop', event => {
+                if (uploadInProgress || !event.dataTransfer.files.length) return;
+                fileInput.files = event.dataTransfer.files;
+                updateSelection();
+            });
+
+            form.addEventListener('submit', event => {
+                event.preventDefault();
+                if (uploadInProgress) return;
+                if (!form.reportValidity()) return;
+
+                uploadInProgress = true;
+                submitButton.disabled = true;
+                status.classList.add('hidden');
+                progressContainer.style.display = 'block';
+                progressText.classList.remove('hidden');
+                progressText.textContent = 'Upload wird vorbereitet …';
+                progressBar.style.width = '0%';
+                progressContainer.setAttribute('aria-valuenow', '0');
+
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', form.action, true);
+                xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+
+                xhr.upload.addEventListener('progress', event => {
+                    if (!event.lengthComputable) return;
+                    const percent = Math.round((event.loaded / event.total) * 100);
+                    progressBar.style.width = percent + '%';
+                    progressContainer.setAttribute('aria-valuenow', String(percent));
+                    progressText.textContent = 'Upload: ' + percent + '%';
+                });
+
+                xhr.addEventListener('load', () => {
+                    let response;
+                    try {
+                        response = JSON.parse(xhr.responseText);
+                    } catch (error) {
+                        response = {
+                            success: false,
+                            message: 'Unerwartete Serverantwort. Bitte prüfe die Verbindung und lade nicht blind erneut hoch.'
+                        };
+                    }
+
+                    if (xhr.status >= 200 && xhr.status < 300 && response.success) {
+                        progressBar.style.width = '100%';
+                        progressContainer.setAttribute('aria-valuenow', '100');
+                        progressText.textContent = 'Upload abgeschlossen.';
+                        showStatus(response.message || 'Upload erfolgreich.', true);
+                        fileInput.value = '';
+                        updateSelection();
+                        progressContainer.style.display = 'block';
+                        progressBar.style.width = '100%';
+                        progressContainer.setAttribute('aria-valuenow', '100');
+                        progressText.classList.remove('hidden');
+                        progressText.textContent = 'Upload abgeschlossen.';
+                    } else {
+                        showStatus(response.message || 'Upload fehlgeschlagen.', false);
+                        progressText.textContent = 'Upload fehlgeschlagen.';
+                    }
+
+                    uploadInProgress = false;
+                    submitButton.disabled = false;
+                });
+
+                xhr.addEventListener('error', () => {
+                    showStatus('Netzwerkfehler beim Upload. Der Speicherstatus ist unbekannt; prüfe den Vorgang vor einem erneuten Upload.', false);
+                    progressText.textContent = 'Verbindung unterbrochen.';
+                    uploadInProgress = false;
+                    submitButton.disabled = false;
+                });
+
+                xhr.addEventListener('abort', () => {
+                    showStatus('Upload abgebrochen. Bereits übertragene Dateien können gespeichert worden sein.', false);
+                    progressText.textContent = 'Upload abgebrochen.';
+                    uploadInProgress = false;
+                    submitButton.disabled = false;
+                });
+
+                xhr.send(new FormData(form));
+            });
+        })();
     </script>
 </body>
 </html>
