@@ -168,7 +168,7 @@ def _archive_path_for_prefix(name_prefix, upload_id, staging_dir):
     """Create the archive in staging, then atomically publish it in MMAG_uploads."""
     # The upload ID makes the final name unique even when the same person starts
     # several uploads with the same name at the same time.
-    archive_name = f"{name_prefix}_upload_{upload_id[:12]}.zip"
+    archive_name = f"{name_prefix}_upload_{upload_id}.zip"
     final_path = os.path.join(MMAG_UPLOAD_FOLDER, archive_name)
     temporary_path = os.path.join(staging_dir, "archive.building")
 
