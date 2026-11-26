@@ -7,6 +7,7 @@ import base64
 import json
 import threading
 import fcntl
+import secrets
 import subprocess
 import requests
 import psutil
@@ -28,7 +29,35 @@ app = Flask(__name__)
 # Keep application INFO messages visible in systemd/journald in production.
 app.logger.setLevel(logging.INFO)
 
-app.secret_key = os.urandom(32)
+def _load_flask_secret_key():
+    """Use one persistent signing key across restarts and WSGI worker processes."""
+    configured_key = os.getenv("FLASK_SECRET_KEY", "").strip()
+    if configured_key:
+        return configured_key
+
+    key_path = os.path.join(BASE_DIR, ".flask_secret_key")
+    key_fd = os.open(key_path, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        # Serialize first-time key creation so all workers read the same value.
+        fcntl.flock(key_fd, fcntl.LOCK_EX)
+        os.lseek(key_fd, 0, os.SEEK_SET)
+        key = os.read(key_fd, 4096).strip()
+
+        if len(key) < 64:
+            key = secrets.token_urlsafe(64).encode("ascii")
+            os.ftruncate(key_fd, 0)
+            os.lseek(key_fd, 0, os.SEEK_SET)
+            os.write(key_fd, key)
+            os.fsync(key_fd)
+
+        os.fchmod(key_fd, 0o600)
+        return key.decode("ascii")
+    finally:
+        fcntl.flock(key_fd, fcntl.LOCK_UN)
+        os.close(key_fd)
+
+
+app.secret_key = _load_flask_secret_key()
 
 # Temporary, isolated MMAG upload feature (remove this registration to disable it).
 app.register_blueprint(mmag_bp)
