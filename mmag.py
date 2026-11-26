@@ -272,15 +272,21 @@ def _finalize_upload_worker(upload_id):
 
         if archive_fd is None:
             # An atomic rename from an earlier worker already published the ZIP.
+            # Coordinate completion with cancellation before reporting success.
             archive_is_published = True
-            _write_upload_status(
-                upload_id,
-                "completed",
-                total_bytes,
-                total_bytes,
-                file_count,
-                "Dateien erfolgreich hochgeladen.",
-            )
+            with _upload_lock(upload_id):
+                try:
+                    os.remove(os.path.join(staging_dir, ".cancel_requested"))
+                except OSError:
+                    pass
+                _write_upload_status(
+                    upload_id,
+                    "completed",
+                    total_bytes,
+                    total_bytes,
+                    file_count,
+                    "Dateien erfolgreich hochgeladen.",
+                )
             for file_index in range(file_count):
                 shutil.rmtree(
                     os.path.join(staging_dir, f"file_{file_index:08d}"),
@@ -784,6 +790,15 @@ def mmag_chunk_cancel(upload_id):
     auth_error = _require_mmag_auth()
     if auth_error:
         return auth_error
+
+    if not os.path.isdir(_staging_path(upload_id)):
+        return jsonify(
+            {
+                "success": True,
+                "state": "cancelled",
+                "message": "Der vorherige Upload wurde bereits entfernt.",
+            }
+        )
 
     try:
         with _upload_lock(upload_id):
