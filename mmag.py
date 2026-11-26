@@ -16,7 +16,6 @@ from flask import (
     Blueprint,
     abort,
     current_app,
-    flash,
     jsonify,
     redirect,
     render_template,
@@ -552,10 +551,15 @@ def mmag_chunk_receive(upload_id, file_index, chunk_index):
     # A retry after a lost response is idempotent: an already stored complete
     # chunk is accepted instead of being written a second time.
     try:
-        if os.path.getsize(part_path) == expected_size:
+        existing_size = os.path.getsize(part_path)
+        if existing_size == expected_size:
             return jsonify({"success": True, "already_received": True})
+        # Recover from a partial chunk left by a process interruption.
+        os.remove(part_path)
     except FileNotFoundError:
         pass
+    except OSError:
+        return _json_error("Ein vorhandener Datenblock kann nicht ersetzt werden.", 500)
 
     try:
         fd = os.open(
@@ -681,88 +685,15 @@ def mmag_upload():
         return render_template("mmag.html", authenticated=False)
 
     if request.method == "POST":
-        # Compatibility fallback for a traditional non-chunked form submission.
-        raw_files = []
-        for key in request.files:
-            raw_files.extend(request.files.getlist(key))
-        files = [item for item in raw_files if item and item.filename]
-        if not files:
-            return _json_error("Keine Dateien ausgewählt.", 400) if _is_xhr_request() else render_template(
-                "mmag.html", authenticated=True, error="Keine Dateien ausgewählt."
-            ), 400
-
-        submitted_name = request.form.get("name", "").strip()
-        name_prefix = secure_filename(submitted_name).strip("._-")[:64].rstrip("._-")
-        if not name_prefix:
-            return _json_error("Bitte gib einen gültigen Namen ein.", 400) if _is_xhr_request() else render_template(
-                "mmag.html", authenticated=True, error="Bitte gib einen gültigen Namen ein."
-            ), 400
-
-        # Save form uploads into a short-lived staging session and use the same
-        # ZIP64 finalizer as the chunked endpoint.
-        upload_id = uuid.uuid4().hex
-        staging_dir = _staging_path(upload_id)
-        os.mkdir(staging_dir, 0o700)
-        metadata_files = []
-        try:
-            for file_index, item in enumerate(files):
-                size = 0
-                file_dir = os.path.join(staging_dir, f"file_{file_index:08d}")
-                os.makedirs(file_dir, mode=0o700, exist_ok=True)
-                chunk_index = 0
-                while True:
-                    block = item.stream.read(MMAG_CHUNK_SIZE)
-                    if not block:
-                        if chunk_index == 0:
-                            fd = os.open(
-                                os.path.join(file_dir, "chunk_00000000.part"),
-                                os.O_WRONLY | os.O_CREAT | os.O_EXCL,
-                                0o600,
-                            )
-                            os.close(fd)
-                        break
-                    part_path = os.path.join(file_dir, f"chunk_{chunk_index:08d}.part")
-                    with open(part_path, "xb") as part:
-                        part.write(block)
-                    size += len(block)
-                    chunk_index += 1
-
-                metadata_files.append(
-                    {
-                        "filename": item.filename,
-                        "size": size,
-                        "chunk_count": max(1, chunk_index),
-                    }
-                )
-
-            total_bytes = sum(file_info["size"] for file_info in metadata_files)
-            _write_json_atomic(
-                os.path.join(staging_dir, "metadata.json"),
-                {
-                    "name_prefix": name_prefix,
-                    "files": metadata_files,
-                    "total_bytes": total_bytes,
-                },
-            )
-            _write_upload_status(
-                upload_id, "uploading", total_bytes, total_bytes, len(files),
-                "Dateien werden archiviert.",
-            )
-            if not _validate_upload_chunks(upload_id, {
-                "files": metadata_files,
-            }):
-                raise OSError("Staged upload validation failed.")
-            _start_archive_finalization(upload_id)
-        except Exception:
-            shutil.rmtree(staging_dir, ignore_errors=True)
-            current_app.logger.exception("MMAG compatibility upload failed.")
-            return _json_error("Der Upload konnte nicht verarbeitet werden.", 500) if _is_xhr_request() else render_template(
-                "mmag.html", authenticated=True, error="Der Upload konnte nicht verarbeitet werden."
-            ), 500
-
+        # File transfers must use the chunk API; do not accept a single huge
+        # multipart request from a stale page or a non-updated client.
+        message = "Bitte lade die MMAG-Seite neu. Große Uploads werden blockweise übertragen."
         if _is_xhr_request():
-            return jsonify({"success": True, "message": "Upload wird verarbeitet."}), 202
-        flash("Upload wird verarbeitet.", "success")
-        return redirect(request.path, code=303)
+            return _json_error(message, 400)
+        return render_template(
+            "mmag.html",
+            authenticated=True,
+            error=message,
+        ), 400
 
     return render_template("mmag.html", authenticated=True)
