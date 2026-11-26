@@ -549,6 +549,93 @@
                 }
             }
 
+            async function discardCurrentUpload() {
+                const activeUploadId = uploadSessionId ||
+                    (pendingResume && pendingResume.upload_id);
+                if (!activeUploadId || uploadInProgress) return;
+
+                uploadInProgress = true;
+                discardButton.disabled = true;
+                addFilesButton.disabled = true;
+                submitButton.disabled = true;
+                progressContainer.style.display = 'block';
+                progressText.classList.remove('hidden');
+                progressText.textContent = 'Upload wird abgebrochen …';
+
+                try {
+                    const result = await postJson(
+                        endpointBase + '/chunk/' + activeUploadId + '/cancel',
+                        {}
+                    );
+
+                    if (result.state === 'cancelling') {
+                        const deadline = Date.now() + 3 * 60 * 1000;
+                        let cancelled = false;
+
+                        while (Date.now() < deadline) {
+                            await delay(1000);
+                            const response = await fetch(
+                                endpointBase + '/chunk/' + activeUploadId + '/status',
+                                {
+                                    method: 'GET',
+                                    credentials: 'same-origin',
+                                    cache: 'no-store',
+                                    headers: {'X-Requested-With': 'XMLHttpRequest'}
+                                }
+                            );
+
+                            if (response.status === 404) {
+                                cancelled = true;
+                                break;
+                            }
+                            if (!response.ok) {
+                                throw new Error('Der Abbruchstatus konnte nicht abgefragt werden.');
+                            }
+
+                            const state = await response.json();
+                            if (state.state === 'cancelled') {
+                                cancelled = true;
+                                break;
+                            }
+                            if (state.state === 'completed') {
+                                throw new Error('Der Upload wurde bereits fertiggestellt und kann nicht mehr abgebrochen werden.');
+                            }
+                        }
+
+                        if (!cancelled) {
+                            throw new Error('Der Server benötigt noch Zeit zum Abbrechen. Bitte prüfe den Status erneut.');
+                        }
+                    } else if (result.state !== 'cancelled') {
+                        throw new Error('Der Upload konnte nicht abgebrochen werden.');
+                    }
+
+                    selectedFiles = [];
+                    fileInput.value = '';
+                    uploadSessionId = null;
+                    pendingResume = null;
+                    clearResumeState();
+                    nextFileIndex = 0;
+                    nextChunkIndex = 0;
+                    acknowledgedBytes = 0;
+                    totalBytes = 0;
+                    progressContainer.style.display = 'none';
+                    progressBar.style.width = '0%';
+                    progressContainer.setAttribute('aria-valuenow', '0');
+                    progressText.classList.add('hidden');
+                    showStatus('Der vorherige Upload wurde verworfen. Du kannst jetzt neue Dateien auswählen.', true);
+                } catch (error) {
+                    showStatus(
+                        'Der vorherige Upload konnte nicht verworfen werden. Bitte versuche es erneut.',
+                        false
+                    );
+                } finally {
+                    uploadInProgress = false;
+                    discardButton.disabled = false;
+                    addFilesButton.disabled = false;
+                    updateSelection();
+                }
+            }
+
             async function finalizeAndWait() {
                 await postJson(endpointBase + '/chunk/' + uploadSessionId + '/finish', {});
 
@@ -602,6 +689,7 @@
             });
             nameInput.addEventListener('input', updateSelection);
 
+            discardButton.addEventListener('click', discardCurrentUpload);
             addFilesButton.addEventListener('click', openFilePicker);
             dropZone.addEventListener('click', openFilePicker);
             dropZone.addEventListener('keydown', event => {
