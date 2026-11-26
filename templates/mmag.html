@@ -43,8 +43,7 @@
                     <button class="btn-action w-100" type="submit">Freischalten</button>
                 </form>
             {% else %}
-                <form id="mmagUploadForm" method="POST" action="{{ request.path }}"
-                      enctype="multipart/form-data">
+                <form id="mmagUploadForm" method="POST" action="{{ request.path }}">
                     <div class="form-group">
                         <label class="form-label" for="mmagName">
                             Dein Name (wird jedem Dateinamen vorangestellt)
@@ -90,8 +89,8 @@
                             id="mmagSubmitButton" disabled>Upload starten</button>
 
                     <p class="form-label mt-1">
-                        Alle ausgewählten Dateien werden serverseitig in einem ZIP-Archiv
-                        gebündelt. Die Dateien werden dabei nicht komprimiert.
+                        Große Uploads werden in 32-MiB-Blöcken übertragen und anschließend
+                        serverseitig in einem ZIP-Archiv ohne Komprimierung gebündelt.
                     </p>
                 </form>
             {% endif %}
@@ -117,8 +116,16 @@
             const submitButton = document.getElementById('mmagSubmitButton');
             const nameInput = document.getElementById('mmagName');
 
+            const endpointBase = form.action.replace(/\/$/, '');
+            const MAX_CHUNK_RETRIES = 3;
             let selectedFiles = [];
             let uploadInProgress = false;
+            let uploadSessionId = null;
+            let chunkSize = 32 * 1024 * 1024;
+            let nextFileIndex = 0;
+            let nextChunkIndex = 0;
+            let acknowledgedBytes = 0;
+            let totalBytes = 0;
 
             function formatBytes(bytes) {
                 if (bytes === 0) return '0 Bytes';
@@ -139,35 +146,57 @@
                     .replace(/'/g, '&#039;');
             }
 
+            function showStatus(message, success) {
+                status.textContent = message;
+                status.className = success ? 'alert alert-success' : 'alert alert-danger';
+            }
+
+            function updateProgress(bytes, label) {
+                const percent = totalBytes > 0
+                    ? Math.min(100, Math.round((bytes / totalBytes) * 100))
+                    : 100;
+                progressBar.style.width = percent + '%';
+                progressContainer.setAttribute('aria-valuenow', String(percent));
+                progressText.textContent = label + ' · ' + percent + '%';
+            }
+
             function updateSelection() {
-                const totalBytes = selectedFiles.reduce((total, file) => total + file.size, 0);
+                const currentTotal = selectedFiles.reduce((sum, file) => sum + file.size, 0);
                 fileCount.textContent = selectedFiles.length === 0
                     ? 'Noch keine Dateien ausgewählt.'
-                    : selectedFiles.length + ' Datei(en) ausgewählt · ' + formatBytes(totalBytes);
+                    : selectedFiles.length + ' Datei(en) ausgewählt · ' + formatBytes(currentTotal);
 
                 fileListPreview.classList.toggle('hidden', selectedFiles.length === 0);
-                fileListPreview.innerHTML = selectedFiles.map((file, index) => `
-                    <div class="file-item">
-                        <div class="file-item-info">
-                            <span class="file-item-name-text">${escapeHtml(file.name)}</span>
-                            <span class="file-item-size">${formatBytes(file.size)}</span>
-                        </div>
-                        <button type="button" class="btn-remove-file"
-                                data-remove-index="${index}"
-                                aria-label="Datei ${escapeHtml(file.name)} entfernen"
-                                title="Datei entfernen">&times;</button>
-                    </div>
-                `).join('');
+                fileListPreview.innerHTML = selectedFiles.map((file, index) => {
+                    const removeDisabled = uploadSessionId || uploadInProgress ? ' disabled' : '';
+                    return '<div class="file-item">' +
+                        '<div class="file-item-info">' +
+                        '<span class="file-item-name-text">' + escapeHtml(file.name) + '</span>' +
+                        '<span class="file-item-size">' + formatBytes(file.size) + '</span>' +
+                        '</div>' +
+                        '<button type="button" class="btn-remove-file" data-remove-index="' +
+                        index + '" aria-label="Datei entfernen" title="Datei entfernen"' +
+                        removeDisabled + '>&times;</button>' +
+                        '</div>';
+                }).join('');
 
+                const selectionLocked = Boolean(uploadSessionId) || uploadInProgress;
+                nameInput.disabled = selectionLocked;
+                addFilesButton.disabled = selectionLocked;
+                dropZone.setAttribute('aria-disabled', selectionLocked ? 'true' : 'false');
                 submitButton.disabled = (
                     selectedFiles.length === 0 ||
                     !nameInput.value.trim() ||
                     uploadInProgress
                 );
+
+                submitButton.textContent = uploadSessionId && !uploadInProgress
+                    ? 'Upload fortsetzen'
+                    : 'Upload starten';
             }
 
             function addSelectedFiles(fileList) {
-                if (uploadInProgress) return;
+                if (uploadInProgress || uploadSessionId) return;
 
                 for (const file of Array.from(fileList || [])) {
                     const alreadyAdded = selectedFiles.some(existing =>
@@ -178,13 +207,235 @@
                     if (!alreadyAdded) selectedFiles.push(file);
                 }
 
-                // Reset so that the same file can be selected again after removal.
                 fileInput.value = '';
                 updateSelection();
             }
 
             function openFilePicker() {
-                if (!uploadInProgress) fileInput.click();
+                if (!uploadInProgress && !uploadSessionId) fileInput.click();
+            }
+
+            function delay(milliseconds) {
+                return new Promise(resolve => setTimeout(resolve, milliseconds));
+            }
+
+            async function postJson(url, payload) {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                let data;
+                try {
+                    data = await response.json();
+                } catch (error) {
+                    throw new Error('Ungültige Serverantwort (HTTP ' + response.status + ').');
+                }
+
+                if (!response.ok || !data.success) {
+                    throw new Error(data.message || 'Serverfehler (HTTP ' + response.status + ').');
+                }
+                return data;
+            }
+
+            async function createUploadSession() {
+                const result = await postJson(endpointBase + '/chunk/start', {
+                    name: nameInput.value.trim(),
+                    files: selectedFiles.map(file => ({
+                        name: file.name,
+                        size: file.size
+                    }))
+                });
+
+                uploadSessionId = result.upload_id;
+                chunkSize = Number(result.chunk_size) || chunkSize;
+                totalBytes = Number(result.total_bytes) || 0;
+                nextFileIndex = 0;
+                nextChunkIndex = 0;
+                acknowledgedBytes = 0;
+                updateSelection();
+            }
+
+            function sendChunkAttempt(fileIndex, chunkIndex, blob, progressBase) {
+                return new Promise((resolve, reject) => {
+                    const formData = new FormData();
+                    formData.append('chunk', blob, 'chunk.bin');
+
+                    const url = endpointBase + '/chunk/' + uploadSessionId +
+                        '/' + fileIndex + '/' + chunkIndex;
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('POST', url, true);
+                    xhr.timeout = 10 * 60 * 1000;
+                    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+
+                    let settled = false;
+                    const fail = error => {
+                        if (settled) return;
+                        settled = true;
+                        reject(error);
+                    };
+
+                    xhr.upload.addEventListener('progress', event => {
+                        if (!event.lengthComputable) return;
+                        const currentChunkBytes = Math.min(event.loaded, blob.size);
+                        updateProgress(
+                            progressBase + currentChunkBytes,
+                            'Dateien werden übertragen'
+                        );
+                    });
+
+                    xhr.addEventListener('load', () => {
+                        if (settled) return;
+                        let response;
+                        try {
+                            response = JSON.parse(xhr.responseText);
+                        } catch (error) {
+                            fail(new Error('Ungültige Antwort beim Übertragen eines Datenblocks.'));
+                            return;
+                        }
+
+                        if (xhr.status >= 200 && xhr.status < 300 && response.success) {
+                            settled = true;
+                            resolve(response);
+                            return;
+                        }
+
+                        const error = new Error(
+                            response.message || 'Datenblock fehlgeschlagen (HTTP ' + xhr.status + ').'
+                        );
+                        error.retryable = xhr.status === 0 ||
+                            xhr.status === 408 ||
+                            xhr.status === 409 ||
+                            xhr.status === 429 ||
+                            xhr.status >= 500;
+                        fail(error);
+                    });
+
+                    xhr.addEventListener('error', () => {
+                        const error = new Error('Netzwerkfehler bei einem Datenblock.');
+                        error.retryable = true;
+                        fail(error);
+                    });
+
+                    xhr.addEventListener('timeout', () => {
+                        const error = new Error('Zeitüberschreitung bei einem Datenblock.');
+                        error.retryable = true;
+                        fail(error);
+                    });
+
+                    xhr.addEventListener('abort', () => {
+                        const error = new Error('Übertragung eines Datenblocks abgebrochen.');
+                        error.retryable = false;
+                        fail(error);
+                    });
+
+                    xhr.send(formData);
+                });
+            }
+
+            async function uploadChunk(fileIndex, chunkIndex, blob, progressBase) {
+                let lastError;
+                for (let attempt = 0; attempt <= MAX_CHUNK_RETRIES; attempt++) {
+                    try {
+                        return await sendChunkAttempt(
+                            fileIndex,
+                            chunkIndex,
+                            blob,
+                            progressBase
+                        );
+                    } catch (error) {
+                        lastError = error;
+                        if (!error.retryable || attempt === MAX_CHUNK_RETRIES) {
+                            throw error;
+                        }
+                        progressText.textContent =
+                            'Verbindung unterbrochen. Datenblock wird erneut gesendet (' +
+                            (attempt + 1) + '/' + MAX_CHUNK_RETRIES + ') …';
+                        await delay(1000 * Math.pow(2, attempt));
+                    }
+                }
+                throw lastError || new Error('Datenblock konnte nicht übertragen werden.');
+            }
+
+            async function transferRemainingChunks() {
+                while (nextFileIndex < selectedFiles.length) {
+                    const file = selectedFiles[nextFileIndex];
+                    const numberOfChunks = Math.max(1, Math.ceil(file.size / chunkSize));
+
+                    if (nextChunkIndex >= numberOfChunks) {
+                        nextFileIndex++;
+                        nextChunkIndex = 0;
+                        continue;
+                    }
+
+                    const start = nextChunkIndex * chunkSize;
+                    const end = Math.min(file.size, start + chunkSize);
+                    const blob = file.slice(start, end);
+
+                    await uploadChunk(
+                        nextFileIndex,
+                        nextChunkIndex,
+                        blob,
+                        acknowledgedBytes
+                    );
+
+                    acknowledgedBytes += blob.size;
+                    nextChunkIndex++;
+                    updateProgress(acknowledgedBytes, 'Dateien werden übertragen');
+                }
+            }
+
+            async function finalizeAndWait() {
+                await postJson(endpointBase + '/chunk/' + uploadSessionId + '/finish', {});
+
+                progressBar.style.width = '0%';
+                progressContainer.setAttribute('aria-valuenow', '0');
+                progressText.textContent = 'ZIP-Archiv wird auf dem Server erstellt …';
+
+                while (true) {
+                    await delay(2000);
+                    const response = await fetch(
+                        endpointBase + '/chunk/' + uploadSessionId + '/status',
+                        {
+                            method: 'GET',
+                            credentials: 'same-origin',
+                            cache: 'no-store',
+                            headers: {'X-Requested-With': 'XMLHttpRequest'}
+                        }
+                    );
+
+                    if (!response.ok) {
+                        throw new Error('Status der ZIP-Erstellung konnte nicht abgefragt werden (HTTP ' + response.status + ').');
+                    }
+
+                    const state = await response.json();
+                    if (!state.success) {
+                        throw new Error(state.message || 'Statusabfrage fehlgeschlagen.');
+                    }
+
+                    const completed = Number(state.processed_bytes) || 0;
+                    const total = Number(state.total_bytes) || 0;
+
+                    if (state.state === 'completed') {
+                        updateProgress(total, 'ZIP-Erstellung abgeschlossen');
+                        return state;
+                    }
+
+                    if (state.state === 'failed') {
+                        throw new Error(state.message || 'ZIP-Erstellung fehlgeschlagen.');
+                    }
+
+                    if (state.state === 'processing') {
+                        updateProgress(completed, 'ZIP-Erstellung auf dem Server');
+                    } else {
+                        progressText.textContent = 'Warte auf den Server …';
+                    }
+                }
             }
 
             fileInput.addEventListener('change', () => {
@@ -203,7 +454,7 @@
 
             fileListPreview.addEventListener('click', event => {
                 const removeButton = event.target.closest('[data-remove-index]');
-                if (!removeButton || uploadInProgress) return;
+                if (!removeButton || uploadInProgress || uploadSessionId) return;
 
                 const index = Number(removeButton.dataset.removeIndex);
                 if (Number.isInteger(index) && index >= 0 && index < selectedFiles.length) {
@@ -215,7 +466,9 @@
             ['dragenter', 'dragover'].forEach(eventName => {
                 dropZone.addEventListener(eventName, event => {
                     event.preventDefault();
-                    if (!uploadInProgress) dropZone.classList.add('drag-over');
+                    if (!uploadInProgress && !uploadSessionId) {
+                        dropZone.classList.add('drag-over');
+                    }
                 });
             });
 
@@ -227,17 +480,12 @@
             });
 
             dropZone.addEventListener('drop', event => {
-                if (!uploadInProgress && event.dataTransfer.files.length) {
+                if (!uploadInProgress && !uploadSessionId && event.dataTransfer.files.length) {
                     addSelectedFiles(event.dataTransfer.files);
                 }
             });
 
-            function showStatus(message, success) {
-                status.textContent = message;
-                status.className = success ? 'alert alert-success' : 'alert alert-danger';
-            }
-
-            form.addEventListener('submit', event => {
+            form.addEventListener('submit', async event => {
                 event.preventDefault();
                 if (uploadInProgress) return;
                 if (!form.reportValidity()) return;
@@ -256,78 +504,41 @@
                 progressText.textContent = 'Upload wird vorbereitet …';
                 progressBar.style.width = '0%';
                 progressContainer.setAttribute('aria-valuenow', '0');
+                updateSelection();
 
-                const formData = new FormData();
-                formData.append('name', nameInput.value.trim());
-                selectedFiles.forEach(file => formData.append('files', file, file.name));
-
-                const xhr = new XMLHttpRequest();
-                xhr.open('POST', form.action, true);
-                xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-
-                xhr.upload.addEventListener('progress', event => {
-                    if (!event.lengthComputable) return;
-                    const percent = Math.round((event.loaded / event.total) * 100);
-                    progressBar.style.width = percent + '%';
-                    progressContainer.setAttribute('aria-valuenow', String(percent));
-                    progressText.textContent = percent >= 100
-                        ? 'Dateien übertragen. Das ZIP-Archiv wird auf dem Server erstellt …'
-                        : 'Upload: ' + percent + '%';
-                });
-
-                xhr.addEventListener('load', () => {
-                    let response;
-                    try {
-                        response = JSON.parse(xhr.responseText);
-                    } catch (error) {
-                        response = {
-                            success: false,
-                            message: 'Unerwartete Serverantwort. Bitte prüfe den Vorgang vor einem erneuten Upload.'
-                        };
+                try {
+                    if (!uploadSessionId) {
+                        await createUploadSession();
                     }
 
-                    if (xhr.status >= 200 && xhr.status < 300 && response.success) {
-                        progressBar.style.width = '100%';
-                        progressContainer.setAttribute('aria-valuenow', '100');
-                        progressText.textContent = 'Upload und ZIP-Erstellung abgeschlossen.';
-                        showStatus(response.message || 'Upload erfolgreich.', true);
+                    await transferRemainingChunks();
+                    const result = await finalizeAndWait();
 
-                        selectedFiles = [];
-                        updateSelection();
-                        nameInput.value = '';
-                    } else {
-                        showStatus(response.message || 'Upload fehlgeschlagen.', false);
-                        progressText.textContent = 'Upload fehlgeschlagen.';
-                    }
-
-                    uploadInProgress = false;
-                    addFilesButton.disabled = false;
-                    updateSelection();
-                });
-
-                xhr.addEventListener('error', () => {
                     showStatus(
-                        'Netzwerkfehler beim Upload. Der Speicherstatus ist unbekannt; prüfe den Vorgang vor einem erneuten Upload.',
+                        result.message || 'Upload und ZIP-Erstellung erfolgreich abgeschlossen.',
+                        true
+                    );
+
+                    selectedFiles = [];
+                    uploadSessionId = null;
+                    nextFileIndex = 0;
+                    nextChunkIndex = 0;
+                    acknowledgedBytes = 0;
+                    totalBytes = 0;
+                    nameInput.value = '';
+                    updateSelection();
+                } catch (error) {
+                    showStatus(
+                        error.message + ' Bereits erfolgreich übertragene Datenblöcke bleiben erhalten. Klicke auf „Upload fortsetzen“, um den Vorgang erneut zu versuchen.',
                         false
                     );
-                    progressText.textContent = 'Verbindung unterbrochen.';
+                    submitButton.textContent = uploadSessionId
+                        ? 'Upload fortsetzen'
+                        : 'Upload starten';
+                } finally {
                     uploadInProgress = false;
-                    addFilesButton.disabled = false;
                     updateSelection();
-                });
-
-                xhr.addEventListener('abort', () => {
-                    showStatus(
-                        'Upload abgebrochen. Bereits übertragene Daten können serverseitig verarbeitet worden sein.',
-                        false
-                    );
-                    progressText.textContent = 'Upload abgebrochen.';
-                    uploadInProgress = false;
-                    addFilesButton.disabled = false;
-                    updateSelection();
-                });
-
-                xhr.send(formData);
+                }
             });
 
             updateSelection();
