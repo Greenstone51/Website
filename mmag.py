@@ -197,6 +197,7 @@ def _finalize_upload_worker(upload_id):
     staging_dir = _staging_path(upload_id)
     temporary_archive_path = None
     final_archive_path = None
+    archive_is_published = False
 
     try:
         metadata = _load_upload_metadata(upload_id)
@@ -218,6 +219,7 @@ def _finalize_upload_worker(upload_id):
 
         if archive_fd is None:
             # An atomic rename from an earlier worker already published the ZIP.
+            archive_is_published = True
             _write_upload_status(
                 upload_id,
                 "completed",
@@ -306,6 +308,7 @@ def _finalize_upload_worker(upload_id):
         os.chmod(temporary_archive_path, 0o600)
         os.replace(temporary_archive_path, final_archive_path)
         temporary_archive_path = None
+        archive_is_published = True
 
         # Publish the completed state before removing source chunks. If cleanup
         # later fails, the finished archive is still available and the client
@@ -350,7 +353,7 @@ def _finalize_upload_worker(upload_id):
                 os.remove(temporary_archive_path)
             except OSError:
                 pass
-        if final_archive_path:
+        if final_archive_path and not archive_is_published:
             try:
                 os.remove(final_archive_path)
             except OSError:
