@@ -687,16 +687,52 @@ def mmag_chunk_status(upload_id):
 
     total_bytes = int(status_data.get("total_bytes", 0))
     processed_bytes = int(status_data.get("processed_bytes", 0))
-    return jsonify(
-        {
-            "success": True,
-            "state": status_data.get("state", "unknown"),
-            "processed_bytes": processed_bytes,
-            "total_bytes": total_bytes,
-            "file_count": int(status_data.get("file_count", 0)),
-            "message": status_data.get("message", ""),
-        }
-    )
+    response = {
+        "success": True,
+        "state": status_data.get("state", "unknown"),
+        "processed_bytes": processed_bytes,
+        "total_bytes": total_bytes,
+        "file_count": int(status_data.get("file_count", 0)),
+        "message": status_data.get("message", ""),
+        "chunk_size": MMAG_CHUNK_SIZE,
+    }
+
+    # A browser reload loses its File objects. When the same files are selected
+    # again, report the first missing chunk so the current upload can resume.
+    if request.args.get("resume") == "1" and response["state"] in {
+        "uploading", "processing", "failed"
+    }:
+        metadata = _load_upload_metadata(upload_id)
+        received_bytes = 0
+        next_file_index = len(metadata["files"])
+        next_chunk_index = 0
+
+        for file_index, file_info in enumerate(metadata["files"]):
+            found_missing_chunk = False
+            for chunk_index in range(file_info["chunk_count"]):
+                part_path = _chunk_path(upload_id, file_index, chunk_index)
+                expected_size = _expected_chunk_size(file_info["size"], chunk_index)
+                try:
+                    actual_size = os.path.getsize(part_path)
+                except OSError:
+                    actual_size = -1
+
+                if actual_size != expected_size:
+                    next_file_index = file_index
+                    next_chunk_index = chunk_index
+                    found_missing_chunk = True
+                    break
+
+                received_bytes += expected_size
+
+            if found_missing_chunk:
+                break
+
+        response["next_file_index"] = next_file_index
+        response["next_chunk_index"] = next_chunk_index
+        response["received_bytes"] = received_bytes
+
+    return jsonify(response)
 
 
 # Flask routes are case-sensitive, so register both spellings explicitly.
