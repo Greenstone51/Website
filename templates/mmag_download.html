@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Greenstone51 // MMAG Download</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="stylesheet" href="/static/style.css?v=22">
+</head>
+<body id="pageBody">
+    {% from 'partials/nav.html' import site_header, site_footer %}
+
+    {{ site_header('download', 'download') }}
+
+    <main>
+{% if not authenticated %}
+        <div class="page-header">
+            <h1 class="page-title">MMAG Download</h1>
+            <p class="page-subtitle">Bitte gib das Passwort ein, um auf die Dateien zuzugreifen.</p>
+        </div>
+
+        <div class="card" style="max-width: 420px; margin: 0 auto;">
+            <form method="post" action="{{ request.path }}" autocomplete="off">
+                <div class="toolbar-download" style="flex-direction: column; align-items: stretch; gap: 12px;">
+                    <input type="password"
+                           name="password"
+                           id="passwordInput"
+                           class="input-search"
+                           placeholder="Passwort"
+                           autocomplete="current-password"
+                           autofocus
+                           required>
+                    <button type="submit" class="btn-action">Anmelden</button>
+                </div>
+                {% if error %}
+                <p role="alert" style="margin: 12px 0 0; text-align: center; color: #ff5c5c;">{{ error }}</p>
+                {% endif %}
+            </form>
+        </div>
+{% else %}
+        <div class="page-header">
+            <h1 class="page-title">MMAG Datei-Download</h1>
+            <p class="page-subtitle" id="pageSubtitle">Klicke eine Datei an zum Herunterladen oder fahre mit der Maus darüber für eine Vorschau.</p>
+        </div>
+
+        <div class="card card-full">
+            <div class="toolbar-download">
+                <input type="text" id="searchInput" placeholder="Dateien filtern..." class="input-search">
+                <button id="downloadBtn" class="btn-action" disabled>Ausgewählte herunterladen (0)</button>
+            </div>
+
+            <div class="table-wrapper">
+                <table class="file-table">
+                    <thead>
+                        <tr>
+                            <th class="th-checkbox">
+                                <input type="checkbox" id="selectAll" class="checkbox-custom">
+                            </th>
+                            <th class="th-sortable" data-sort="name">
+                                Dateiname <span id="sort-name" class="sort-arrow"></span>
+                            </th>
+                            <th class="th-sortable" data-sort="size">
+                                Größe <span id="sort-size" class="sort-arrow"></span>
+                            </th>
+                            <th class="th-sortable" data-sort="mtime">
+                                Uploaddatum <span id="sort-mtime" class="sort-arrow"></span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="fileListBody">
+                        <tr>
+                            <td colspan="4" class="table-empty-msg">Lade Dateiliste...</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="logout-wrapper">
+                    <a href="/mmag-logout" class="btn-action btn-outline">Ausloggen</a>
+                </div>
+            </div>
+        </div>
+{% endif %}
+    </main>
+
+{% if authenticated %}
+    <div id="previewBackdrop" class="preview-backdrop"></div>
+
+    <div id="previewPopover" class="preview-popover">
+        <img id="previewImage" src="" alt="Vorschau" class="hidden">
+        <pre id="previewText" class="hidden"></pre>
+        <div id="previewInfo" class="preview-info hidden"></div>
+    </div>
+{% endif %}
+
+    {{ site_footer() }}
+
+{% if authenticated %}
+    <script>
+        const API_LIST = '/mmag-download/api/files';
+        const FILE_BASE = '/mmag-download/file/';
+        const ZIP_URL = '/mmag-download/zip';
+
+        const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+        const isMobileOS = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent)
+            || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        const isCoarsePointer = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+        const isRealTouchDevice = isMobileOS || isCoarsePointer;
+        const supportsHover = window.matchMedia('(hover: hover)').matches && !isRealTouchDevice;
+
+        const pageSubtitle = document.getElementById('pageSubtitle');
+        if (isRealTouchDevice) {
+            document.body.classList.add('touch-device');
+            pageSubtitle.textContent = 'Tippe eine Datei an zum Herunterladen oder nutze den Vorschau-Button für eine Vorschau.';
+        }
+
+        let currentFiles = [];
+        let lastListJson = '';
+        const selectedFiles = new Set();
+        let currentHoverUrl = '';
+        const textCache = new Map();
+
+        let sortColumn = 'name';
+        let sortDirection = 'asc';
+
+        const popover = document.getElementById('previewPopover');
+        const popoverImg = document.getElementById('previewImage');
+        const popoverText = document.getElementById('previewText');
+        const popoverInfo = document.getElementById('previewInfo');
+        const backdrop = document.getElementById('previewBackdrop');
+        const tbody = document.getElementById('fileListBody');
+        const searchInput = document.getElementById('searchInput');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const selectAll = document.getElementById('selectAll');
+
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        function formatDate(mtime) {
+            return new Date(mtime * 1000).toLocaleString('de-DE', {
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit'
+            });
+        }
+
+        function getFileType(filename) {
+            if (/\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)$/i.test(filename)) return 'image';
+            if (/\.(txt|log|md|cfg|conf|ini|json|py|sh|css|html|js|rtf|csv|xml|yaml|yml)$/i.test(filename)) return 'text';
+            return 'generic';
+        }
+
+        function fileUrl(name) {
+            return FILE_BASE + encodeURIComponent(name);
+        }
+
+        function triggerBlobDownload(blob, filename) {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            }, 100);
+        }
+
+        // Session expired -> reload so the server shows the login again
+        function handleAuthLoss(response) {
+            if (response.status === 401 || response.status === 403) {
+                window.location.reload();
+                return true;
+            }
+            return false;
+        }
+
+        async function fetchFileList() {
+            try {
+                const response = await fetch(API_LIST, { credentials: 'same-origin' });
+                if (handleAuthLoss(response)) return;
+                if (!response.ok) return;
+                const files = await response.json();
+
+                // Only re-render when something changed (keeps hover previews stable)
+                const json = JSON.stringify(files);
+                if (json === lastListJson) return;
+                lastListJson = json;
+
+                currentFiles = files;
+                // Drop selections of files that no longer exist
+                const names = new Set(files.map(f => f.name));
+                [...selectedFiles].forEach(n => { if (!names.has(n)) selectedFiles.delete(n); });
+                renderFileList();
+            } catch (err) {
+                console.error('Fehler beim Abrufen der Dateiliste:', err);
+            }
+        }
+
+        function setSort(col) {
+            if (sortColumn === col) {
+                sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                sortColumn = col;
+                sortDirection = 'asc';
+            }
+            renderFileList();
+        }
+
+        function updateSortHeaders() {
+            ['name', 'size', 'mtime'].forEach(col => {
+                const el = document.getElementById('sort-' + col);
+                if (el) el.textContent = sortColumn === col ? (sortDirection === 'asc' ? '▲' : '▼') : '';
+            });
+        }
+
+        function getFilteredFiles() {
+            const q = searchInput.value.toLowerCase();
+            return currentFiles.filter(f => f.name.toLowerCase().includes(q));
+        }
+
+        function emptyRow(text) {
+            const tr = document.createElement('tr');
+            const td = document.createElement('td');
+            td.colSpan = 4;
+            td.className = 'table-empty-msg';
+            td.textContent = text;
+            tr.appendChild(td);
+            return tr;
+        }
+
+        function renderFileList() {
+            const filtered = getFilteredFiles();
+
+            filtered.sort((a, b) => {
+                let valA = a[sortColumn];
+                let valB = b[sortColumn];
+                if (sortColumn === 'name') {
+                    const r = valA.toLowerCase().localeCompare(valB.toLowerCase());
+                    return sortDirection === 'asc' ? r : -r;
+                }
+                if (sortDirection === 'asc') return valA > valB ? 1 : valA < valB ? -1 : 0;
+                return valA < valB ? 1 : valA > valB ? -1 : 0;
+            });
+
+            updateSortHeaders();
+            tbody.replaceChildren();
+
+            if (filtered.length === 0) {
+                tbody.appendChild(emptyRow('Keine Dateien vorhanden.'));
+                updateDownloadButton();
+                return;
+            }
+
+            filtered.forEach(file => {
+                const url = fileUrl(file.name);
+                const type = getFileType(file.name);
+                const sizeStr = formatBytes(file.size);
+                const dateStr = formatDate(file.mtime);
+
+                const tr = document.createElement('tr');
+                tr.className = 'file-row';
+
+                // Checkbox
+                const tdCheck = document.createElement('td');
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.className = 'item-checkbox checkbox-custom';
+                cb.value = file.name;
+                cb.checked = selectedFiles.has(file.name);
+                cb.addEventListener('change', () => toggleFileSelection(cb));
+                tdCheck.appendChild(cb);
+
+                // Name + preview button
+                const tdName = document.createElement('td');
+                tdName.className = 'file-name-cell';
+                const wrapper = document.createElement('div');
+                wrapper.className = 'file-name-wrapper';
+
+                const link = document.createElement('a');
+                link.className = 'file-link';
+                link.href = url;
+                link.setAttribute('download', file.name);
+                link.textContent = file.name;
+                link.addEventListener('mouseenter', e => {
+                    if (supportsHover) {
+                        showPreview(url, type, file.name, sizeStr, dateStr);
+                        movePreview(e);
+                    }
+                });
+                link.addEventListener('mousemove', movePreview);
+                link.addEventListener('mouseleave', hidePreview);
+
+                const previewBtn = document.createElement('button');
+                previewBtn.className = 'btn-preview-mobile';
+                previewBtn.type = 'button';
+                const previewImg = document.createElement('img');
+                previewImg.src = '/static/preview-btn.svg';
+                previewImg.alt = 'Vorschau';
+                previewBtn.appendChild(previewImg);
+                previewBtn.addEventListener('click', e => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    showPreview(url, type, file.name, sizeStr, dateStr);
+                    backdrop.style.display = 'block';
+                });
+
+                wrapper.appendChild(link);
+                wrapper.appendChild(previewBtn);
+                tdName.appendChild(wrapper);
+
+                // Size + date
+                const tdSize = document.createElement('td');
+                tdSize.className = 'cell-nowrap';
+                tdSize.textContent = sizeStr;
+                const tdDate = document.createElement('td');
+                tdDate.className = 'cell-nowrap';
+                tdDate.textContent = dateStr;
+
+                tr.append(tdCheck, tdName, tdSize, tdDate);
+                tbody.appendChild(tr);
+            });
+
+            updateDownloadButton();
+        }
+
+        function showPreview(url, type, name, sizeStr, dateStr) {
+            currentHoverUrl = url;
+            popoverImg.classList.add('hidden');
+            popoverText.classList.add('hidden');
+            popoverInfo.classList.add('hidden');
+
+            if (type === 'image') {
+                popoverImg.src = url;
+                popoverImg.classList.remove('hidden');
+                popover.style.display = 'block';
+            } else if (type === 'text') {
+                popoverText.classList.remove('hidden');
+                popover.style.display = 'block';
+
+                if (textCache.has(url)) {
+                    popoverText.textContent = textCache.get(url);
+                } else {
+                    popoverText.textContent = 'Lade Vorschau...';
+                    fetch(url, { credentials: 'same-origin' })
+                        .then(res => {
+                            if (!res.ok) throw new Error('HTTP ' + res.status);
+                            return res.text();
+                        })
+                        .then(text => {
+                            const snippet = text.length > 500 ? text.substring(0, 500) + '...' : text;
+                            textCache.set(url, snippet);
+                            if (currentHoverUrl === url) popoverText.textContent = snippet;
+                        })
+                        .catch(() => {
+                            if (currentHoverUrl === url) popoverText.textContent = 'Fehler beim Laden der Vorschau.';
+                        });
+                }
+            } else {
+                const ext = name.includes('.') ? name.split('.').pop().toUpperCase() : 'Unbekannt';
+                popoverInfo.replaceChildren();
+
+                const title = document.createElement('div');
+                title.className = 'preview-info-title';
+                title.textContent = 'Datei-Informationen';
+                popoverInfo.appendChild(title);
+
+                [
+                    ['Name:', name],
+                    ['Typ:', '.' + ext + '-Datei'],
+                    ['Größe:', sizeStr],
+                    ['Uploaddatum:', dateStr]
+                ].forEach(([label, value]) => {
+                    const strong = document.createElement('strong');
+                    strong.textContent = label;
+                    popoverInfo.appendChild(strong);
+                    popoverInfo.appendChild(document.createTextNode(' ' + value));
+                    popoverInfo.appendChild(document.createElement('br'));
+                });
+
+                popoverInfo.classList.remove('hidden');
+                popover.style.display = 'block';
+            }
+        }
+
+        function movePreview(e) {
+            if (!supportsHover || popover.style.display !== 'block') return;
+            let posX = e.clientX + 15;
+            let posY = e.clientY + 15;
+            if (posX + 420 > window.innerWidth) posX = e.clientX - 425;
+            popover.style.left = posX + 'px';
+            popover.style.top = posY + 'px';
+        }
+
+        function hidePreview() {
+            currentHoverUrl = '';
+            popover.style.display = 'none';
+            backdrop.style.display = 'none';
+            popoverImg.src = '';
+            popoverText.textContent = '';
+            popoverInfo.replaceChildren();
+        }
+
+        function toggleFileSelection(checkbox) {
+            if (checkbox.checked) selectedFiles.add(checkbox.value);
+            else selectedFiles.delete(checkbox.value);
+            updateDownloadButton();
+        }
+
+        function toggleSelectAll(master) {
+            getFilteredFiles().forEach(file => {
+                if (master.checked) selectedFiles.add(file.name);
+                else selectedFiles.delete(file.name);
+            });
+            renderFileList();
+        }
+
+        function updateDownloadButton() {
+            const count = selectedFiles.size;
+            downloadBtn.textContent = 'Ausgewählte herunterladen (' + count + ')';
+            downloadBtn.disabled = count === 0;
+
+            if (currentFiles.length > 0 && count === currentFiles.length) {
+                selectAll.checked = true;
+                selectAll.indeterminate = false;
+            } else if (count > 0) {
+                selectAll.checked = false;
+                selectAll.indeterminate = true;
+            } else {
+                selectAll.checked = false;
+                selectAll.indeterminate = false;
+            }
+        }
+
+        async function downloadSelected() {
+            const filesArray = Array.from(selectedFiles);
+            if (filesArray.length === 0) return;
+
+            try {
+                if (filesArray.length === 1) {
+                    const name = filesArray[0];
+                    const response = await fetch(fileUrl(name), { credentials: 'same-origin' });
+                    if (handleAuthLoss(response)) return;
+                    if (!response.ok) throw new Error('Download fehlgeschlagen');
+                    triggerBlobDownload(await response.blob(), name);
+                } else {
+                    const response = await fetch(ZIP_URL, {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ files: filesArray })
+                    });
+                    if (handleAuthLoss(response)) return;
+                    if (!response.ok) throw new Error('Fehler beim Erstellen der ZIP-Datei.');
+                    triggerBlobDownload(await response.blob(), 'greenstone51_downloads.zip');
+                }
+            } catch (err) {
+                alert(err.message || 'Download fehlgeschlagen');
+            }
+        }
+
+        // Event wiring
+        searchInput.addEventListener('input', renderFileList);
+        selectAll.addEventListener('change', () => toggleSelectAll(selectAll));
+        downloadBtn.addEventListener('click', downloadSelected);
+        backdrop.addEventListener('click', hidePreview);
+        document.querySelectorAll('.th-sortable').forEach(th => {
+            th.addEventListener('click', () => setSort(th.dataset.sort));
+        });
+
+        fetchFileList();
+        setInterval(fetchFileList, 5000);
+    </script>
+{% endif %}
+
+</body>
+</html>

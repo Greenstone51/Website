@@ -23,6 +23,7 @@ from flask import (
     render_template,
     request,
     session,
+    send_from_directory
 )
 from werkzeug.security import check_password_hash
 from werkzeug.utils import secure_filename
@@ -978,3 +979,86 @@ def mmag_upload():
         ), 400
 
     return render_template("mmag.html", authenticated=True)
+
+MMAG_DOWNLOAD_FOLDER = os.path.abspath(os.path.join(BASE_DIR, "mmag_downloads"))
+os.makedirs(MMAG_DOWNLOAD_FOLDER, mode=0o700, exist_ok=True)
+
+@mmag_bp.route("/mmag-download", methods=["GET", "POST"])
+def mmag_download():
+    if request.method == "POST" and not session.get("mmag_authenticated"):
+        password = request.form.get("password", "")
+        if not MMAG_PASSWORD_HASH or "REPLACE_WITH_" in MMAG_PASSWORD_HASH:
+            current_app.logger.error("MMAG_PASSWORD_HASH has not been configured.")
+            abort(503)
+
+        if check_password_hash(MMAG_PASSWORD_HASH, password):
+            session["mmag_authenticated"] = True
+            return redirect(request.path, code=303)
+
+        return render_template(
+            "mmag_download.html",
+            authenticated=False,
+            error="Falsches Passwort.",
+        ), 401
+
+    if not session.get("mmag_authenticated"):
+        return render_template("mmag_download.html", authenticated=False)
+
+    return render_template("mmag_download.html", authenticated=True)
+
+@mmag_bp.route('/mmag-download/api/files', methods=['GET'])
+def api_list_files():
+    folder = MMAG_DOWNLOAD_FOLDER
+    file_list = []
+    if os.path.exists(folder):
+        for fname in os.listdir(folder):
+            fpath = os.path.join(folder, fname)
+            if os.path.isfile(fpath) and not fname.startswith('.'):
+                stat = os.stat(fpath)
+                file_list.append({
+                    'name': fname,
+                    'size': stat.st_size,
+                    'mtime': stat.st_mtime
+                })
+    return jsonify(file_list)
+
+@mmag_bp.route('/mmag-download/file/<path:filename>', methods=['GET'])
+def download_file(filename):
+    try:
+        return send_from_directory(
+            MMAG_DOWNLOAD_FOLDER,
+            filename,
+            as_attachment=True
+        )
+    except FileNotFoundError:
+        abort(404)
+
+@mmag_bp.route('/mmag-download/zip', methods=['POST'])
+def download_zip():
+    data = request.get_json() or {}
+    filenames = data.get('files', [])
+    if not filenames:
+        return jsonify({'error': 'Keine Dateien ausgewählt'}), 400
+
+    memory_file = io.BytesIO()
+    base_dir = MMAG_DOWNLOAD_FOLDER
+
+    with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for fname in filenames:
+            target_path = os.path.abspath(os.path.join(base_dir, fname))
+            if os.path.commonpath([base_dir, target_path]) == base_dir and os.path.isfile(target_path):
+                arcname = os.path.basename(target_path)
+                zf.write(target_path, arcname=arcname)
+
+    memory_file.seek(0)
+    return send_file(
+        memory_file,
+        mimetype='application/zip',
+        as_attachment=True,
+        download_name='greenstone51_downloads.zip'
+    )
+
+@mmag_bp.route("/mmag-logout")
+def mmag_logout():
+    session.pop("mmag_authenticated", None)
+    return redirect("/mmag-download", code=303)
