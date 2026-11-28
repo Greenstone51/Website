@@ -34,7 +34,7 @@ from config import BASE_DIR
 mmag_bp = Blueprint("mmag", __name__)
 
 # Keep only the scrypt hash here, never the plaintext password.
-MMAG_PASSWORD_HASH = "scrypt:32768:8:1$UCiUfz7IaGSpiodp$2b9efe421a542daae88ad220d16dedd25f0f20dcc9d63f5f69fd849d38cc779dccf93366ccf8cb0b214a71994dc6b802b57f8c444e889b379023406f9cf5fecc"
+MMAG_PASSWORD_HASH = "scrypt:32768:8:1$492vAuClA6HIQava$1825b07a42333eaab67359337cdd7612491d8b5c374d0bc50d3e88023716d470e0d9952e6c6868528bd10904036026f22d711ed86365d9fc82ded5ac81885572"
 
 MMAG_UPLOAD_FOLDER = os.path.abspath(os.path.join(BASE_DIR, "MMAG_uploads"))
 MMAG_STAGING_FOLDER = os.path.join(MMAG_UPLOAD_FOLDER, ".staging")
